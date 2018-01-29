@@ -1,3 +1,8 @@
+# Top Tomato
+Chrome Extension - How not to cure your tab addiction
+
+https://chrome.google.com/webstore/detail/top-tomato/ncjlgbnopdeldjbdbcpgdepfifhpocip
+
 # Compilation
 
 ```
