@@ -15,6 +15,8 @@ At the bottom right of chrome://extensions/ you can assign a keyboard shortcut t
 
 If you like it, please rate it.
 
+github: https://github.com/damien-brunet/Top-Tomato/
+
 My other extensions:
 - Wikipedia Lookup - Browser Action
 - Wikipedia Lookup - Context Menu
