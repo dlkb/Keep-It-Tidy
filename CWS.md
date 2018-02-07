@@ -5,7 +5,7 @@ Yet another tab manager.
 You can search the selection by entering keywords into the field.
 Example: cat woman, superman, batman = ('cat' AND 'woman') OR ('superman') OR ('batman')
 
-Actions like "extract" applies to the whole selection unless there are checked tabs, in which case they applies to the subselection.
+Actions like "extract" apply to the whole selection unless there are checked tabs, in which case they apply to the subselection.
 
 You can move tabs by dragging the "xx tabs" icon in the toolbar to a new position in the left panel. The selected tabs will be inserted before the tab you dropped the selection on.
 
