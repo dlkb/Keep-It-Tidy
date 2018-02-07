@@ -1,5 +1,7 @@
 # Chrome Web Store Description
 
+Yet another tab manager. 
+
 You can search the selection by entering keywords into the field.
 Example: cat woman, superman, batman = ('cat' AND 'woman') OR ('superman') OR ('batman')
 
