@@ -1,4 +1,4 @@
-var MAX_LENGTH = 333; // max length of arrays used to keep track of the browsing history
+var MAX_LENGTH = 333; // max length of array used to keep track of the browsing history
 var visited = []; // tabIds of the last visited tabs
 var timeout;
 
