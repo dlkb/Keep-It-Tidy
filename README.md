@@ -1,5 +1,5 @@
 # Top Tomato
-Chrome Extension - How not to cure your tab addiction
+Chrome Extension - Tab Manager
 
 https://chrome.google.com/webstore/detail/top-tomato/ncjlgbnopdeldjbdbcpgdepfifhpocip
 
