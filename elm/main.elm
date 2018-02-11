@@ -7,6 +7,7 @@ import Json.Decode as Decode
 import String
 import Regex
 import Array
+import Keyboard
 
 main =
   Html.programWithFlags
@@ -103,6 +104,7 @@ type Msg
   | FocusTab Int
   | SetMessage String
   | Drop Int Int  -- windowId, index
+  | KeyboardDown Int
 
 type alias WindowsInfos =
   { windows : List WindowInfos }
@@ -410,6 +412,20 @@ update msg model =
       ( model
       , Ports.moveTabs ((getPertinentSelection model), windowId, index)
       )
+    KeyboardDown keyCode ->
+      let
+        sel = getPertinentSelection model
+
+        first = List.head sel
+      in
+        if keyCode == 13 && (List.length sel)==1 then -- if Enter is pressed and only one tab is selected
+          case first of
+            Just tabId ->
+              ( model, Ports.focusTab tabId )
+            Nothing ->
+              ( model, Cmd.none )
+        else
+          ( model, Cmd.none )
     
 
 onUpdatedTree : String -> Model -> Model
@@ -542,7 +558,11 @@ selectSimilar model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  Ports.updatedTree UpdatedTree
+  Sub.batch
+    [ Ports.updatedTree UpdatedTree
+    , Keyboard.downs KeyboardDown
+    ]
+
 
 
 view : Model -> Html Msg
