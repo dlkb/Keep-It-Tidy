@@ -30,6 +30,7 @@ body {
   border-left: 1px solid black;
   display: flex;
   flex-flow: column;
+  width: 450px;
 }
 .browser {
   background-image: url("/img/curve.svg");
