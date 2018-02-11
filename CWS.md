@@ -1,9 +1,11 @@
 # Chrome Web Store Description
 
-Yet another tab manager. 
+Yet another tab manager: group, move, delete, sort, pin tabs
 
 You can search the selection by entering keywords into the field.
 Example: cat woman, superman, batman = ('cat' AND 'woman') OR ('superman') OR ('batman')
+
+If only one tab is selected, press Enter to focus this tab.
 
 Actions like "extract" apply to the whole selection unless there are checked tabs, in which case they apply to the subselection.
 
