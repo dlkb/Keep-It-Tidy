@@ -38,7 +38,7 @@ body {
 }
 .footer {
   border-top: 1px solid;
-  padding: 3px;
+  padding: 2px;
   display: flex;
   flex-flow: row;
   align-items: stretch;
@@ -46,6 +46,7 @@ body {
   font-size: 16px;
   height: 20px;
   overflow: hidden;
+  white-space: nowrap;
 }
 .footer_hint {
   font-size: 17px;
