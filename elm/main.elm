@@ -274,7 +274,7 @@ update msg model =
             |> updateTabsField allTabIds (setChecked False)
             |> updateTabsField tabIds (setChecked True)
       in
-        ( { model1 | search = string }
+        ( { model1 | search = string, sortBy = Checked }
         , Cmd.none
         )
     ClearSearch ->
