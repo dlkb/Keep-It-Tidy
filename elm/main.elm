@@ -361,6 +361,7 @@ update msg model =
             |> updateTabsField (getTabIds model) (setSelected False)
             |> updateTabsField [tabId] (setSelected True)
             |> updateTabsField [tabId] (setMouseOverFavicon False)
+            |> updateTabsField [tabId] (setSpotlight False)
             |> clearSearch
       in
       ( model1
