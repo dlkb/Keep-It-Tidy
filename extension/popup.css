@@ -33,8 +33,6 @@ body {
   width: 450px;
 }
 .browser {
-  background-image: url("/img/curve.svg");
-  background-size: 100% 100%;
   flex: 1;
 }
 .footer {
