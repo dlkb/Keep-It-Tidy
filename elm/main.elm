@@ -722,7 +722,7 @@ viewWindow model window =
                 [ ( "window", True )
                 , ( "incognito", window.incognito )
                 ]
-            , Events.onClick (FocusWindow window.id)
+            , Events.onDoubleClick (FocusWindow window.id)
             ]
             ([ container ] ++ [ footer ])
 
