@@ -295,12 +295,12 @@ update msg model =
 
                 tabIds =
                     getSelected model
-                        |> List.filter (\tab -> match tab)
-                        |> List.map (\tab -> tab.id)
+                        |> List.filter match
+                        |> List.map .id
 
                 allTabIds =
                     getSelected model
-                        |> List.map (\tab -> tab.id)
+                        |> List.map .id
 
                 model1 =
                     model
@@ -431,7 +431,7 @@ update msg model =
             let
                 toBeSelected =
                     getChecked model
-                        |> List.map (\tab -> tab.id)
+                        |> List.map .id
 
                 model1 =
                     model
@@ -577,11 +577,11 @@ invertSelection model =
     let
         checked =
             getChecked model
-                |> List.map (\tab -> tab.id)
+                |> List.map .id
 
         selected =
             getSelected model
-                |> List.map (\tab -> tab.id)
+                |> List.map .id
     in
     if List.isEmpty checked then
         -- if no subselection then we invert the selection
@@ -599,22 +599,22 @@ selectSimilar model =
 
         domainOf tab =
             Regex.find (Regex.AtMost 1) regex tab.url
-                |> List.map (\m -> m.submatches)
+                |> List.map .submatches
                 |> List.concat
 
         checkedDomains =
             getChecked model
-                |> List.map (\tab -> domainOf tab)
+                |> List.map domainOf
 
         selectedDomains =
             getSelected model
-                |> List.map (\tab -> domainOf tab)
+                |> List.map domainOf
 
         tabIds : List Tab -> List (List (Maybe String)) -> List Int
         tabIds tabs domains =
             tabs
                 |> List.filter (\tab -> List.member (domainOf tab) domains)
-                |> List.map (\tab -> tab.id)
+                |> List.map .id
     in
     if List.isEmpty checkedDomains then
         updateTabsField (tabIds (getTabs model) selectedDomains) (setSelected True) model
@@ -1084,7 +1084,7 @@ viewItem model tab =
         color =
             model.windows
                 |> List.filter (\window -> window.id == tab.windowId)
-                |> List.map (\window -> window.color)
+                |> List.map .color
                 |> List.head
 
         windowColor =
@@ -1223,7 +1223,7 @@ getIndexOfWindow : Model -> Int -> Maybe Int
 getIndexOfWindow model windowId =
     model.windows
         |> List.filter (\window -> window.id == windowId)
-        |> List.map (\window -> window.index)
+        |> List.map .index
         |> List.head
 
 
@@ -1253,17 +1253,17 @@ getIndexOf model tabId =
 getSelected : Model -> List Tab
 getSelected model =
     model.windows
-        |> List.map (\window -> window.tabs)
+        |> List.map .tabs
         |> List.concat
-        |> List.filter (\tab -> tab.selected)
+        |> List.filter .selected
 
 
 getChecked : Model -> List Tab
 getChecked model =
     model.windows
-        |> List.map (\window -> window.tabs)
+        |> List.map .tabs
         |> List.concat
-        |> List.filter (\tab -> tab.checked)
+        |> List.filter .checked
 
 
 
@@ -1277,33 +1277,33 @@ getPertinentSelection model =
             getChecked model
     in
     if List.isEmpty checked then
-        List.map (\tab -> tab.id) (getSelected model)
+        List.map .id (getSelected model)
     else
-        List.map (\tab -> tab.id) checked
+        List.map .id checked
 
 
 getTabs : Model -> List Tab
 getTabs model =
     model.windows
-        |> List.map (\window -> window.tabs)
+        |> List.map .tabs
         |> List.concat
 
 
 getTabIds : Model -> List Int
 getTabIds model =
     model.windows
-        |> List.map (\window -> window.tabs)
+        |> List.map .tabs
         |> List.concat
-        |> List.map (\tab -> tab.id)
+        |> List.map .id
 
 
 getTabIdsOfWindow : Model -> Int -> List Int
 getTabIdsOfWindow model windowId =
     model.windows
         |> List.filter (\window -> window.id == windowId)
-        |> List.map (\window -> window.tabs)
+        |> List.map .tabs
         |> List.concat
-        |> List.map (\tab -> tab.id)
+        |> List.map .id
 
 
 
