@@ -13,7 +13,7 @@ You can move tabs by dragging the "xx tabs" icon in the toolbar to a new positio
 
 You can doubleclick a tab in the left panel to focus this tab.
 
-You can click a window in the left panel to focus this window.
+You can doubleclick a window in the left panel to focus this window.
 
 At the bottom right of chrome://extensions/ you can assign a keyboard shortcut to Top Tomato.
 
