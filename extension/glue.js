@@ -38,10 +38,12 @@ function onLoad() {
   
     app.ports.focusWindow.subscribe(function(windowId) {
       chrome.runtime.sendMessage({"task":"focusWindow", "windowId":windowId});
+      window.close();
     });
   
     app.ports.focusTab.subscribe(function(tabId) {
       chrome.runtime.sendMessage({"task":"focusTab", "tabId":tabId});
+      window.close();
     });
   
     app.ports.moveTabs.subscribe(function(arg) {
