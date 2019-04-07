@@ -1,18 +1,19 @@
-module Main exposing (..)
+module Main exposing (Action(..), Edit(..), Flags, Kind(..), Model, Msg(..), Pos, Sort(..), Tab, TabInfos, Window, WindowInfos, WindowsInfos, buildTab, buildWindow, clearSearch, getChecked, getIndexOf, getIndexOfWindow, getPertinentSelection, getSelected, getSelection, getTabIds, getTabIdsOfWindow, getTabs, init, invertSelection, main, onEventThenStop, onUpdatedTree, selectSimilar, selectTabsInWindow, setChecked, setMouseOverFavicon, setSelected, setSpotlight, subscriptions, tabDecoder, toggleChecked, toggleSelected, update, updateTabsField, view, viewBrowser, viewEditSelection, viewEditSelectionHelp, viewExecuteAction, viewExecuteActionHelp, viewFooter, viewInput, viewItem, viewPreview, viewPreviewHelp, viewSelection, viewSortSelection, viewSortSelectionHelp, viewTab, viewToolbar, viewWindow, windowDecoder, windowsDecoder)
 
 import Array
+import Browser
+import Browser.Events
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
 import Json.Decode as Decode
-import Keyboard
 import Ports
 import Regex
 import String
 
 
 main =
-    Html.programWithFlags
+    Browser.element
         { init = init
         , view = view
         , update = update
@@ -93,7 +94,7 @@ type Action
 
 type Msg
     = NoOp
-    | MouseEnterItem Int String -- an item is a tab in the selection (right) Int=tabId, String=Url
+    | MouseEnterItem Int String -- an item is a tab in the selection (right): tabId, Url
     | MouseLeaveItem Int
     | MouseOverFavicon Int Bool
     | CheckboxClick Int
@@ -110,12 +111,12 @@ type Msg
     | FaviconClick Int -- favicon of an item
     | RemoveClick Int
     | UpdatedTree String -- String is a JSON encoded string
-    | ClickOnFavicons
+    | FaviconsClick
     | FocusWindow Int
     | FocusTab Int
     | SetMessage String
     | Drop Int Int -- windowId, index
-    | KeyboardDown Int
+    | EnterPressed
 
 
 type alias WindowsInfos =
@@ -169,7 +170,7 @@ buildWindow index { id, incognito, focused, tabsInfos } =
             Array.fromList [ "SlateBlue", "MediumAquaMarine", "SkyBlue", "DeepPink", "SlateGray", "Coral", "Olive", "Peru", "Navy", "PaleVioletRed" ]
 
         color =
-            Array.get (index % Array.length colors) colors
+            Array.get (modBy (Array.length colors) index) colors
 
         picked =
             case color of
@@ -200,6 +201,7 @@ buildTab index { id, url, faviconUrl, title, focused, pinned, windowId } =
                     if String.left 15 value == "chrome://theme/" then
                         -- We can't load these urls
                         default
+
                     else
                         value
 
@@ -226,7 +228,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         NoOp ->
-            model ! []
+            ( model, Cmd.none )
 
         MouseEnterItem tabId url ->
             let
@@ -274,16 +276,25 @@ update msg model =
 
         Search string ->
             let
+                regexify str =
+                    case Regex.fromString str of
+                        Just r ->
+                            r
+
+                        Nothing ->
+                            Regex.never
+
                 words =
                     string
-                        |> Regex.replace Regex.All (Regex.regex "^ *") (\_ -> "")
-                        |> Regex.replace Regex.All (Regex.regex " *$") (\_ -> "")
-                        |> Regex.split Regex.All (Regex.regex " *, *")
-                        |> List.map (Regex.split Regex.All (Regex.regex " +"))
+                        |> Regex.replace (regexify "^ *") (\_ -> "")
+                        |> Regex.replace (regexify " *$") (\_ -> "")
+                        |> Regex.split (regexify " *, *")
+                        |> List.map (Regex.split (regexify " +"))
 
                 contains tab word =
                     if word == "" then
                         False
+
                     else
                         String.contains (String.toLower word) (String.toLower (tab.url ++ " " ++ tab.title))
 
@@ -427,7 +438,7 @@ update msg model =
             , Cmd.none
             )
 
-        ClickOnFavicons ->
+        FaviconsClick ->
             let
                 toBeSelected =
                     getChecked model
@@ -464,7 +475,7 @@ update msg model =
             , Ports.moveTabs ( getPertinentSelection model, windowId, index )
             )
 
-        KeyboardDown keyCode ->
+        EnterPressed ->
             let
                 sel =
                     getPertinentSelection model
@@ -472,14 +483,15 @@ update msg model =
                 first =
                     List.head sel
             in
-            if keyCode == 13 && List.length sel == 1 then
-                -- if Enter is pressed and only one tab is selected
+            if List.length sel == 1 then
+                -- if only one tab is selected
                 case first of
                     Just tabId ->
                         ( model, Ports.focusTab tabId )
 
                     Nothing ->
                         ( model, Cmd.none )
+
             else
                 ( model, Cmd.none )
 
@@ -511,6 +523,7 @@ updateTabsField tabIds f model =
         updateTab tab =
             if List.member tab.id tabIds then
                 f tab
+
             else
                 tab
 
@@ -586,6 +599,7 @@ invertSelection model =
     if List.isEmpty checked then
         -- if no subselection then we invert the selection
         updateTabsField (getTabIds model) toggleSelected model
+
     else
         -- otherwise we invert the subselection
         updateTabsField selected toggleChecked model
@@ -595,10 +609,15 @@ selectSimilar : Model -> Model
 selectSimilar model =
     let
         regex =
-            Regex.regex "^.+?://([^/]+).*"
+            case Regex.fromString "^.+?://([^/]+).*" of
+                Just r ->
+                    r
+
+                Nothing ->
+                    Regex.never
 
         domainOf tab =
-            Regex.find (Regex.AtMost 1) regex tab.url
+            Regex.findAtMost 1 regex tab.url
                 |> List.map .submatches
                 |> List.concat
 
@@ -618,6 +637,7 @@ selectSimilar model =
     in
     if List.isEmpty checkedDomains then
         updateTabsField (tabIds (getTabs model) selectedDomains) (setSelected True) model
+
     else
         updateTabsField (tabIds (getSelected model) checkedDomains) (setChecked True) model
 
@@ -626,8 +646,22 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Ports.updatedTree UpdatedTree
-        , Keyboard.downs KeyboardDown
+        , Browser.Events.onKeyDown keyDecoder
         ]
+
+
+keyDecoder : Decode.Decoder Msg
+keyDecoder =
+    Decode.map toMsg (Decode.field "key" Decode.string)
+
+
+toMsg : String -> Msg
+toMsg string =
+    if string == "Enter" then
+        EnterPressed
+
+    else
+        NoOp
 
 
 view : Model -> Html Msg
@@ -657,14 +691,13 @@ viewBrowser model =
     let
         createWindow =
             Html.div
-                [ Attributes.class "createWindow"
-                , Events.onClick CreateWindow
-                , Events.on "drop" (Decode.succeed (Execute Extract))
-                , Events.onWithOptions "dragover" { preventDefault = True, stopPropagation = True } (Decode.succeed NoOp)
-                , Events.onWithOptions "dragenter" { preventDefault = True, stopPropagation = True } (Decode.succeed NoOp)
-                , Events.onMouseEnter (SetMessage "Open a new window")
-                , Events.onMouseLeave (SetMessage "")
-                ]
+                ([ Attributes.class "createWindow"
+                 , Events.onClick CreateWindow
+                 , Events.on "drop" (Decode.succeed (Execute Extract))
+                 ]
+                    ++ displayMessage "Open a new window"
+                    ++ dropzonable
+                )
                 []
 
         windows =
@@ -680,12 +713,12 @@ viewWindow model window =
     let
         selectTabs =
             Html.div
-                [ Attributes.class "selectTabs"
-                , Attributes.style [ ( "background-color", window.color ) ]
-                , onEventThenStop "click" (SelectTabs window.id)
-                , Events.onMouseEnter (SetMessage "Select tabs from this window")
-                , Events.onMouseLeave (SetMessage "")
-                ]
+                ([ Attributes.class "selectTabs"
+                 , Attributes.style "background-color" window.color
+                 , onEventThenStop "click" (SelectTabs window.id)
+                 ]
+                    ++ displayMessage "Select tabs from this window"
+                )
                 []
 
         footer =
@@ -695,14 +728,13 @@ viewWindow model window =
 
         createTab =
             Html.div
-                [ Attributes.class "createTab"
-                , onEventThenStop "click" (CreateTab window.id)
-                , Events.on "drop" (Decode.succeed (Drop window.id -1))
-                , Events.onWithOptions "dragover" { preventDefault = True, stopPropagation = True } (Decode.succeed NoOp)
-                , Events.onWithOptions "dragenter" { preventDefault = True, stopPropagation = True } (Decode.succeed NoOp)
-                , Events.onMouseEnter (SetMessage "Open a new tab")
-                , Events.onMouseLeave (SetMessage "")
-                ]
+                ([ Attributes.class "createTab"
+                 , onEventThenStop "click" (CreateTab window.id)
+                 , Events.on "drop" (Decode.succeed (Drop window.id -1))
+                 ]
+                    ++ displayMessage "Open a new tab"
+                    ++ dropzonable
+                )
                 []
 
         tabs =
@@ -716,6 +748,7 @@ viewWindow model window =
     if List.isEmpty tabs then
         Html.text ""
         --empty node
+
     else
         Html.div
             [ Attributes.classList
@@ -730,7 +763,7 @@ viewWindow model window =
 viewTab : Model -> Tab -> Html Msg
 viewTab model tab =
     Html.div
-        [ Attributes.classList
+        ([ Attributes.classList
             [ ( "tab", True )
             , ( "selected", tab.selected )
             , ( "pinned", tab.pinned )
@@ -738,27 +771,30 @@ viewTab model tab =
             , ( "focused", tab.focused )
             , ( "spotlight", tab.spotlight )
             ]
-        , Attributes.title tab.title
-        , Attributes.style
-            [ ( "background-image", "url(" ++ tab.faviconUrl ++ ")" ) ]
-        , onEventThenStop "click" (TabClick tab.id)
-        , onEventThenStop "dblclick" (FocusTab tab.id)
-        , Events.onMouseEnter (SetMessage tab.title)
-        , Events.onMouseLeave (SetMessage "")
-        , Events.on "drop" (Decode.succeed (Drop tab.windowId tab.index))
-        , Events.onWithOptions "dragover" { preventDefault = True, stopPropagation = True } (Decode.succeed NoOp)
-        , Events.onWithOptions "dragenter" { preventDefault = True, stopPropagation = True } (Decode.succeed NoOp)
-        ]
+         , Attributes.title tab.title
+         , Attributes.style
+            "background-image"
+            ("url(" ++ tab.faviconUrl ++ ")")
+         , onEventThenStop "click" (TabClick tab.id)
+         , onEventThenStop "dblclick" (FocusTab tab.id)
+         , Events.on "drop" (Decode.succeed (Drop tab.windowId tab.index))
+         ]
+            ++ displayMessage tab.title
+            ++ dropzonable
+        )
         []
+
+
+dropzonable : List (Html.Attribute Msg)
+dropzonable =
+    [ Events.custom "dragover" (Decode.succeed { message = NoOp, preventDefault = True, stopPropagation = True })
+    , Events.custom "dragenter" (Decode.succeed { message = NoOp, preventDefault = True, stopPropagation = True })
+    ]
 
 
 onEventThenStop : String -> msg -> Html.Attribute msg
 onEventThenStop event message =
-    let
-        options =
-            { stopPropagation = True, preventDefault = False }
-    in
-    Events.onWithOptions event options (Decode.succeed message)
+    Events.custom event (Decode.succeed { message = message, preventDefault = False, stopPropagation = True })
 
 
 viewToolbar : Model -> Html Msg
@@ -798,12 +834,12 @@ viewInput model =
             ]
             []
         , Html.div
-            [ Attributes.classList
+            ([ Attributes.classList
                 [ ( "clearSearch", model.search /= "" ) ]
-            , Events.onClick ClearSearch
-            , Events.onMouseEnter (SetMessage "Clear")
-            , Events.onMouseLeave (SetMessage "")
-            ]
+             , Events.onClick ClearSearch
+             ]
+                ++ displayMessage "Clear"
+            )
             []
         ]
 
@@ -857,14 +893,14 @@ viewEditSelectionHelp edit =
                     "Uncheck all tabs"
     in
     Html.div
-        [ Attributes.classList
+        ([ Attributes.classList
             [ ( "edit", True )
             , ( str, True )
             ]
-        , Events.onClick (Apply edit)
-        , Events.onMouseEnter (SetMessage message)
-        , Events.onMouseLeave (SetMessage "")
-        ]
+         , Events.onClick (Apply edit)
+         ]
+            ++ displayMessage message
+        )
         []
 
 
@@ -911,15 +947,15 @@ viewSortSelectionHelp model sort =
                     "Group tabs by window"
     in
     Html.div
-        [ Attributes.classList
+        ([ Attributes.classList
             [ ( "sort", True )
             , ( str, True )
             , ( "selected", model.sortBy == sort )
             ]
-        , Events.onClick (SortBy sort)
-        , Events.onMouseEnter (SetMessage message)
-        , Events.onMouseLeave (SetMessage "")
-        ]
+         , Events.onClick (SortBy sort)
+         ]
+            ++ displayMessage message
+        )
         [ Html.text str ]
 
 
@@ -939,24 +975,27 @@ viewPreview model =
                     , ( "selected", True )
                     ]
                 , Attributes.style
-                    [ ( "background-image", "url(chrome://favicon)" ) ]
+                    "background-image"
+                    "url(chrome://favicon)"
                 ]
                 []
 
         content =
             if List.isEmpty selected then
                 [ Html.text "" ]
+
             else if List.isEmpty checked then
                 [ Html.div
-                    [ Attributes.class "preview_xtabs"
-                    , Attributes.draggable "true"
-                    , Events.onMouseEnter (SetMessage "You can drag these tabs to a new position")
-                    , Events.onMouseLeave (SetMessage "")
-                    ]
-                    [ Html.text (toString (List.length selected) ++ " x")
+                    ([ Attributes.class "preview_xtabs"
+                     , Attributes.draggable "true"
+                     ]
+                        ++ displayMessage "You can drag these tabs to a new position"
+                    )
+                    [ Html.text (String.fromInt (List.length selected) ++ " x")
                     , tab
                     ]
                 ]
+
             else
                 checked
                     |> List.map viewPreviewHelp
@@ -968,8 +1007,9 @@ viewPreview model =
             if not <| List.isEmpty checked then
                 [ Events.onMouseEnter (MouseOverFavicons True)
                 , Events.onMouseLeave (MouseOverFavicons False)
-                , Events.onClick ClickOnFavicons
+                , Events.onClick FaviconsClick
                 ]
+
             else
                 []
     in
@@ -1009,7 +1049,8 @@ viewPreviewHelp tab =
     Html.div
         [ Attributes.class "preview_favicon"
         , Attributes.style
-            [ ( "background-image", "url(" ++ tab.faviconUrl ++ ")" ) ]
+            "background-image"
+            ("url(" ++ tab.faviconUrl ++ ")")
         ]
         []
 
@@ -1057,14 +1098,14 @@ viewExecuteActionHelp action =
                     "Pin/Unpin tabs"
     in
     Html.div
-        [ Attributes.classList
+        ([ Attributes.classList
             [ ( "action", True )
             , ( str, True )
             ]
-        , Events.onClick (Execute action)
-        , Events.onMouseEnter (SetMessage message)
-        , Events.onMouseLeave (SetMessage "")
-        ]
+         , Events.onClick (Execute action)
+         ]
+            ++ displayMessage message
+        )
         []
 
 
@@ -1119,7 +1160,8 @@ viewItem model tab =
             Html.div
                 [ Attributes.class "item_favicon"
                 , Attributes.style
-                    [ ( "background-image", "url(" ++ tab.faviconUrl ++ ")" ) ]
+                    "background-image"
+                    ("url(" ++ tab.faviconUrl ++ ")")
                 , Events.onClick (FaviconClick tab.id)
                 , Events.onMouseEnter (MouseOverFavicon tab.id True)
                 , Events.onMouseLeave (MouseOverFavicon tab.id False)
@@ -1133,14 +1175,11 @@ viewItem model tab =
                 ]
                 [ Html.text tab.title ]
 
-        onCheckboxClick message =
-            Events.onWithOptions "click" { preventDefault = True, stopPropagation = True } (Decode.succeed message)
-
         checkbox =
             Html.div
                 [ Attributes.class "item_checkbox"
-                , Attributes.style [ ( "background-color", windowColor ) ]
-                , onCheckboxClick (CheckboxClick tab.id)
+                , Attributes.style "background-color" windowColor
+                , Events.onClick (CheckboxClick tab.id)
                 ]
                 [ Html.input
                     [ Attributes.type_ "checkbox"
@@ -1183,6 +1222,11 @@ viewFooter model =
             txt "footer_url" str
 
 
+displayMessage : String -> List (Html.Attribute Msg)
+displayMessage message =
+    [ Events.onMouseEnter (SetMessage message), Events.onMouseLeave (SetMessage "") ]
+
+
 getSelection : Model -> List Tab
 getSelection model =
     let
@@ -1198,6 +1242,7 @@ getSelection model =
                 (\tab ->
                     if tab.checked then
                         1
+
                     else
                         2
                 )
@@ -1227,12 +1272,9 @@ getIndexOfWindow model windowId =
         |> List.head
 
 
-
--- finds the index of a tab in the visited list
-
-
 getIndexOf : Model -> Int -> Int
 getIndexOf model tabId =
+    -- finds the index of a tab in the visited list
     let
         helper : List Int -> Int -> Int -> Int
         helper lst elem offset =
@@ -1244,6 +1286,7 @@ getIndexOf model tabId =
                 x :: xs ->
                     if x == elem then
                         offset
+
                     else
                         helper xs elem (offset + 1)
     in
@@ -1266,18 +1309,16 @@ getChecked model =
         |> List.filter .checked
 
 
-
--- return the checked tabIds, or if no checked tabs, the whole selection
-
-
 getPertinentSelection : Model -> List Int
 getPertinentSelection model =
+    -- return the checked tabIds, or if no checked tabs, the whole selection
     let
         checked =
             getChecked model
     in
     if List.isEmpty checked then
         List.map .id (getSelected model)
+
     else
         List.map .id checked
 

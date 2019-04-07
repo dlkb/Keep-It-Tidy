@@ -1,6 +1,9 @@
 function onLoad() {
   chrome.runtime.sendMessage({"task":"init"}, function(response){
-    var app = Elm.Main.fullscreen({windows: response.windows, visited: response.visited});
+    var app = Elm.Main.init({
+      node: document.getElementById('elm'),
+      flags: {windows: response.windows, visited: response.visited}
+    });
 
     chrome.runtime.onMessage.addListener(
       function(message, sender, sendResponse) {
@@ -54,7 +57,5 @@ function onLoad() {
 }
 
 document.addEventListener("DOMContentLoaded", function() {
-  setTimeout(function() {
-    onLoad();
-  }, 1); // To prevent the "popup width and height aren't set" bug
+  onLoad();
 });
