@@ -7,7 +7,5 @@ https://chrome.google.com/webstore/detail/top-tomato/ncjlgbnopdeldjbdbcpgdepfifh
 
 ```
 cd elm
-elm-make main.elm --output=popup.js
-cd ..
-mv elm/popup.js extension/popup.js
+elm make src/Main.elm --output=popup.js --optimize && mv popup.js ../extension/
 ```
