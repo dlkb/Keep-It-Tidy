@@ -25,7 +25,7 @@ type alias Model =
     { windows : List Window
     , search : String -- search bar request
     , sortBy : Sort
-    , footer : Kind -- hint or url
+    , footer : Kind -- hint, title or url
     , mouseOverFavicons : Bool -- mouse over favicons in the toolbar
     , visited : List Int -- last visited tabs
     , dragOn : Maybe Pos
@@ -68,6 +68,7 @@ type alias Tab =
 type Kind
     = Url String
     | Hint String
+    | Title String
 
 
 type Sort
@@ -90,6 +91,7 @@ type Action
     | Delete
     | Sort
     | Pin
+    | RemoveDuplicates
 
 
 type Msg
@@ -114,7 +116,7 @@ type Msg
     | FaviconsClick
     | FocusWindow Int
     | FocusTab Int
-    | SetMessage String
+    | SetMessage Kind
     | Drop Int Int -- windowId, index
     | EnterPressed
 
@@ -371,6 +373,11 @@ update msg model =
                     , Ports.pinTabs (getPertinentSelection model)
                     )
 
+                RemoveDuplicates ->
+                    ( model
+                    , Ports.removeDuplicates (getPertinentSelection model)
+                    )
+
         Apply edit ->
             case edit of
                 All ->
@@ -466,7 +473,7 @@ update msg model =
             )
 
         SetMessage message ->
-            ( { model | footer = Hint message }
+            ( { model | footer = message }
             , Cmd.none
             )
 
@@ -695,7 +702,7 @@ viewBrowser model =
                  , Events.onClick CreateWindow
                  , Events.on "drop" (Decode.succeed (Execute Extract))
                  ]
-                    ++ displayMessage "Open a new window"
+                    ++ displayMessage (Hint "Open a new window")
                     ++ dropzonable
                 )
                 []
@@ -717,7 +724,7 @@ viewWindow model window =
                  , Attributes.style "background-color" window.color
                  , onEventThenStop "click" (SelectTabs window.id)
                  ]
-                    ++ displayMessage "Select tabs from this window"
+                    ++ displayMessage (Hint "Select tabs from this window")
                 )
                 []
 
@@ -732,7 +739,7 @@ viewWindow model window =
                  , onEventThenStop "click" (CreateTab window.id)
                  , Events.on "drop" (Decode.succeed (Drop window.id -1))
                  ]
-                    ++ displayMessage "Open a new tab"
+                    ++ displayMessage (Hint "Open a new tab")
                     ++ dropzonable
                 )
                 []
@@ -779,7 +786,7 @@ viewTab model tab =
          , onEventThenStop "dblclick" (FocusTab tab.id)
          , Events.on "drop" (Decode.succeed (Drop tab.windowId tab.index))
          ]
-            ++ displayMessage tab.title
+            ++ displayMessage (Title tab.title)
             ++ dropzonable
         )
         []
@@ -838,7 +845,7 @@ viewInput model =
                 [ ( "clearSearch", model.search /= "" ) ]
              , Events.onClick ClearSearch
              ]
-                ++ displayMessage "Clear"
+                ++ displayMessage (Hint "Clear")
             )
             []
         ]
@@ -899,7 +906,7 @@ viewEditSelectionHelp edit =
             ]
          , Events.onClick (Apply edit)
          ]
-            ++ displayMessage message
+            ++ displayMessage (Hint message)
         )
         []
 
@@ -954,7 +961,7 @@ viewSortSelectionHelp model sort =
             ]
          , Events.onClick (SortBy sort)
          ]
-            ++ displayMessage message
+            ++ displayMessage (Hint message)
         )
         [ Html.text str ]
 
@@ -989,7 +996,7 @@ viewPreview model =
                     ([ Attributes.class "preview_xtabs"
                      , Attributes.draggable "true"
                      ]
-                        ++ displayMessage "You can drag these tabs to a new position"
+                        ++ displayMessage (Hint "You can drag these tabs to a new position")
                     )
                     [ Html.text (String.fromInt (List.length selected) ++ " x")
                     , tab
@@ -1059,7 +1066,7 @@ viewExecuteAction : Model -> Html Msg
 viewExecuteAction model =
     let
         actions =
-            [ Extract, Delete, Sort, Pin ]
+            [ Extract, Delete, Sort, Pin, RemoveDuplicates ]
     in
     Html.div
         [ Attributes.class "executeAction" ]
@@ -1083,6 +1090,9 @@ viewExecuteActionHelp action =
                 Pin ->
                     "pin"
 
+                RemoveDuplicates ->
+                    "remove_duplicates"
+
         message =
             case action of
                 Extract ->
@@ -1092,10 +1102,13 @@ viewExecuteActionHelp action =
                     "Remove tabs"
 
                 Sort ->
-                    "Sort tabs by URL"
+                    "Sort tabs by url and title"
 
                 Pin ->
                     "Pin/Unpin tabs"
+
+                RemoveDuplicates ->
+                    "Remove duplicates"
     in
     Html.div
         ([ Attributes.classList
@@ -1104,7 +1117,7 @@ viewExecuteActionHelp action =
             ]
          , Events.onClick (Execute action)
          ]
-            ++ displayMessage message
+            ++ displayMessage (Hint message)
         )
         []
 
@@ -1221,10 +1234,13 @@ viewFooter model =
         Url str ->
             txt "footer_url" str
 
+        Title str ->
+            txt "footer_title" str
 
-displayMessage : String -> List (Html.Attribute Msg)
+
+displayMessage : Kind -> List (Html.Attribute Msg)
 displayMessage message =
-    [ Events.onMouseEnter (SetMessage message), Events.onMouseLeave (SetMessage "") ]
+    [ Events.onMouseEnter (SetMessage message), Events.onMouseLeave (SetMessage (Hint "")) ]
 
 
 getSelection : Model -> List Tab

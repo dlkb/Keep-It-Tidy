@@ -6,6 +6,7 @@ port module Ports exposing
     , focusWindow
     , moveTabs
     , pinTabs
+    , removeDuplicates
     , removeTabs
     , sortTabs
     , updatedTree
@@ -45,6 +46,9 @@ port focusTab : Int -> Cmd msg
 
 
 port moveTabs : Bundle -> Cmd msg
+
+
+port removeDuplicates : List Int -> Cmd msg
 
 
 

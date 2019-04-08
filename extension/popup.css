@@ -48,10 +48,14 @@ body {
   white-space: nowrap;
 }
 .footer_hint {
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: bold;
 }
 .footer_url {
   font-size: 14px; 
+}
+.footer_title {
+  font-size: 16px;
 }
 .createWindow {
   width: 20px;
@@ -347,6 +351,9 @@ body {
 }
 .action.pin {
   background-image: url("/img/pin-128.png");
+}
+.action.remove_duplicates {
+  background-image: url("/img/x1-128.png");
 }
 .selection {
 }

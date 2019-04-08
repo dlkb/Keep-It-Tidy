@@ -4,7 +4,7 @@ function onLoad() {
       node: document.getElementById('elm'),
       flags: {windows: response.windows, visited: response.visited}
     });
-
+    
     chrome.runtime.onMessage.addListener(
       function(message, sender, sendResponse) {
         switch (message.task) {
@@ -52,6 +52,10 @@ function onLoad() {
     app.ports.moveTabs.subscribe(function(arg) {
       var [tabIds, windowId, index] = arg;
       chrome.runtime.sendMessage({"task":"moveTabs", "tabIds":tabIds, "windowId":windowId, "index":index});
+    });
+
+    app.ports.removeDuplicates.subscribe(function(tabIds) {
+      chrome.runtime.sendMessage({"task":"removeDuplicates", "tabIds":tabIds});
     });
   }); 
 }

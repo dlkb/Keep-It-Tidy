@@ -1,4 +1,4 @@
-var MAX_LENGTH = 333; // max length of array used to keep track of the browsing history
+const MAX_LENGTH = 333; // max length of array used to keep track of the browsing history
 var visited = []; // tabIds of the last visited tabs
 var timeout;
 
@@ -22,7 +22,7 @@ function newTree() {
         "windows": windows
       });
     });
-  }, 1);
+  }, 100);
 }
 
 function getWindows(callback) {
@@ -51,22 +51,17 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   case "extractTabs":
     var tabIds = message.tabIds;
     var isTabPinned = {};
-    for (var i=0, tabId; tabId=tabIds[i]; i++) {
-      (function(tabId) {
-        chrome.tabs.get(tabId, function(tab) {
-          isTabPinned[tabId] = tab.pinned;
-        });
-      })(tabId);
+    for (let tabId of tabIds) {
+      chrome.tabs.get(tabId, function(tab) {
+        isTabPinned[tabId] = tab.pinned;
+      });
     }
     var firstTabId = tabIds.shift(); 
     chrome.windows.create({"tabId":firstTabId}, function(win) {
       chrome.tabs.update(firstTabId, {"pinned":isTabPinned[firstTabId]});
       chrome.tabs.move(tabIds, {"windowId":win.id, "index":1}, function() {
-        var count = 0;
-        for (var i=0, tabId; tabId=tabIds[i]; i++) {
-          (function(tabId) {
-            chrome.tabs.update(tabId, {"pinned":isTabPinned[tabId]});
-          })(tabId);
+        for (let tabId of tabIds) {
+          chrome.tabs.update(tabId, {"pinned":isTabPinned[tabId]});
         }
       });
     });
@@ -74,54 +69,65 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   case "pinTabs":
     var tabIds = message.tabIds;
     var count = 0;
-    for (var i=0, tabId; tabId=tabIds[i]; i++) {
-      (function(tabId) {
-        chrome.tabs.get(tabId, function(tab) {
-          chrome.tabs.update(tabId, {"pinned": !tab.pinned});
-        });
-      })(tabId);
+    for (let tabId of tabIds) {
+      chrome.tabs.get(tabId, function(tab) {
+        chrome.tabs.update(tabId, {"pinned": !tab.pinned});
+      });
     }
     return;
   case "sortTabs":
     var tabIds = message.tabIds;
     var urls = {}; // tabId1 : url, ...
-    f = function(callback) {
-      var count = 0;
-      for (var i=0, tabId; tabId=tabIds[i]; i++) {
-        (function(tabId) {
-          count++;
-          chrome.tabs.get(tabId, function(tab) {
-            urls[tabId] = tab.url;
-            if (count == tabIds.length) {
-              callback();
+    var titles = {}; // tabId1 : title, ...
+    var count = 0;
+    for (let tabId of tabIds) {
+      chrome.tabs.get(tabId, function(tab) {
+        count++;
+        urls[tabId] = tab.url;
+        titles[tabId] = tab.title;
+        if (count == tabIds.length) {
+          tabIds.sort(function(tabId1, tabId2) {  // sort by concatenation of url and title
+            if (urls[tabId1]+titles[tabId1] < urls[tabId2]+titles[tabId2]) {
+              return -1;
+            }
+            if (urls[tabId1]+titles[tabId1] > urls[tabId2]+titles[tabId2]) {
+              return 1;
             }
           });
-        })(tabId);
-      }
-    }
-    callback = function() {
-      tabIds.sort(function(tabId1, tabId2) {
-        if (urls[tabId1] < urls[tabId2]) {
-          return -1;
-        }
-        if (urls[tabId1] > urls[tabId2]) {
-          return 1;
+          chrome.tabs.move(tabIds, {"index": -1}); // defaults to the window the tab is currently in
         }
       });
-      chrome.tabs.move(tabIds, {"index": -1}); // defaults to the window the tab is currently in
     }
-    f(callback);
     return;
   case "focusWindow":
     chrome.windows.update(message.windowId, {"focused":true});
-    return
+    return;
   case "focusTab":
     chrome.tabs.update(message.tabId, {"active":true}, function(tab) {
       chrome.windows.update(tab.windowId, {"focused":true});
     });
-    return
+    return;
   case "moveTabs":
     chrome.tabs.move(message.tabIds, {"index": message.index, "windowId": message.windowId});
+    return;
+  case "removeDuplicates":
+    var tabIds = message.tabIds;
+    var toRemove = [];
+    var existingUrls = [];
+    var count = 0;
+    for (let tabId of tabIds) {
+      chrome.tabs.get(tabId, function(tab) {
+        count++;
+        if (existingUrls.includes(tab.url)) {
+          toRemove.push(tabId);
+        } else {
+          existingUrls.push(tab.url);
+        }
+        if (count==tabIds.length) {
+          chrome.tabs.remove(toRemove);
+        }
+      });
+    }
     return;
   }
 });
@@ -163,18 +169,18 @@ chrome.windows.onFocusChanged.addListener(function(windowId) {
   });
 });
 
-var UPDATE_FROM_102 = "Top Tomato is not ugly anymore. Check the Chrome Web Store for more info.";
+var UPDATE_FROM_216 = "New feature: you can remove duplicates. Also TT is a bit faster.";
 
 chrome.runtime.onInstalled.addListener(function(details) {
   if (details.reason=="install") { // if first installation
   // Set default values for options
   } else if (details.reason=="update") { // if update of the extension
   // Say something to the user.
-    if (details.previousVersion=="1.0.2") {
+    if (details.previousVersion=="2.1.6") {
       var options = {
         type: "basic",
         title: "Update",
-        message: UPDATE_FROM_102,
+        message: UPDATE_FROM_216,
         contextMessage: "- Damien",
         iconUrl: "img/128.png"
       }
