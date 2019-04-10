@@ -23,8 +23,6 @@
   },
   "permissions": [
     "tabs",
-    "notifications",
-    "chrome://favicon/"
-  ],
-  "minimum_chrome_version": "73"
+    "notifications"
+  ]
 }

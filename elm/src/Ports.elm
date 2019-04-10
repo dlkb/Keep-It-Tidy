@@ -12,12 +12,6 @@ port module Ports exposing
     , updatedTree
     )
 
-
-type alias Bundle =
-    ( List Int, Int, Int )
-
-
-
 -- Output
 
 
@@ -45,7 +39,7 @@ port focusWindow : Int -> Cmd msg
 port focusTab : Int -> Cmd msg
 
 
-port moveTabs : Bundle -> Cmd msg
+port moveTabs : ( List Int, Int, Int ) -> Cmd msg
 
 
 port removeDuplicates : List Int -> Cmd msg

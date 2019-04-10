@@ -1,4 +1,4 @@
-module Main exposing (Action(..), Edit(..), Flags, Kind(..), Model, Msg(..), Pos, Sort(..), Tab, TabInfos, Window, WindowInfos, WindowsInfos, buildTab, buildWindow, clearSearch, getChecked, getIndexOf, getIndexOfWindow, getPertinentSelection, getSelected, getSelection, getTabIds, getTabIdsOfWindow, getTabs, init, invertSelection, main, onEventThenStop, onUpdatedTree, selectSimilar, selectTabsInWindow, setChecked, setMouseOverFavicon, setSelected, setSpotlight, subscriptions, tabDecoder, toggleChecked, toggleSelected, update, updateTabsField, view, viewBrowser, viewEditSelection, viewEditSelectionHelp, viewExecuteAction, viewExecuteActionHelp, viewFooter, viewInput, viewItem, viewPreview, viewPreviewHelp, viewSelection, viewSortSelection, viewSortSelectionHelp, viewTab, viewToolbar, viewWindow, windowDecoder, windowsDecoder)
+module Main exposing (main)
 
 import Array
 import Browser
@@ -28,13 +28,6 @@ type alias Model =
     , footer : Kind -- hint, title or url
     , mouseOverFavicons : Bool -- mouse over favicons in the toolbar
     , visited : List Int -- last visited tabs
-    , dragOn : Maybe Pos
-    }
-
-
-type alias Pos =
-    { windowId : Int
-    , index : Int
     }
 
 
@@ -53,7 +46,6 @@ type alias Tab =
     , url : String
     , faviconUrl : String
     , title : String
-    , focused : Bool
     , pinned : Bool
     , windowId : Int
     , selected : Bool
@@ -105,8 +97,8 @@ type Msg
     | Search String
     | ClearSearch
     | CreateWindow
-    | CreateTab Int
-    | SelectTabs Int
+    | CreateTab Int -- windowId
+    | SelectTabs Int -- windowId
     | Execute Action
     | Apply Edit
     | MouseOverFavicons Bool -- mouse over favicons in preview (toolbar)
@@ -138,7 +130,6 @@ type alias TabInfos =
     , url : String
     , faviconUrl : Maybe String
     , title : String
-    , focused : Bool
     , pinned : Bool
     , windowId : Int
     }
@@ -154,7 +145,7 @@ init : Flags -> ( Model, Cmd Msg )
 init flags =
     let
         model =
-            Model [] "" Visited (Hint "Welcome!") False flags.visited Nothing
+            Model [] "" Visited (Hint "Welcome!") False flags.visited
 
         model1 =
             onUpdatedTree flags.windows model
@@ -192,10 +183,10 @@ buildWindow index { id, incognito, focused, tabsInfos } =
 
 
 buildTab : Int -> TabInfos -> Tab
-buildTab index { id, url, faviconUrl, title, focused, pinned, windowId } =
+buildTab index { id, url, faviconUrl, title, pinned, windowId } =
     let
         default =
-            "chrome://favicon"
+            "img/default_favicon.png"
 
         fav =
             case faviconUrl of
@@ -214,7 +205,6 @@ buildTab index { id, url, faviconUrl, title, focused, pinned, windowId } =
     , url = url
     , faviconUrl = fav
     , title = title
-    , focused = focused
     , pinned = pinned
     , windowId = windowId
     , selected = False
@@ -775,7 +765,6 @@ viewTab model tab =
             , ( "selected", tab.selected )
             , ( "pinned", tab.pinned )
             , ( "checked", tab.checked )
-            , ( "focused", tab.focused )
             , ( "spotlight", tab.spotlight )
             ]
          , Attributes.title tab.title
@@ -831,7 +820,7 @@ viewToolbar model =
 viewInput : Model -> Html Msg
 viewInput model =
     Html.div
-        []
+        [ Attributes.class "search_container" ]
         [ Html.input
             [ Attributes.class "search"
             , Attributes.value model.search
@@ -983,7 +972,7 @@ viewPreview model =
                     ]
                 , Attributes.style
                     "background-image"
-                    "url(chrome://favicon)"
+                    "url(img/default_favicon.png)"
                 ]
                 []
 
@@ -1224,18 +1213,20 @@ viewFooter model =
     let
         txt kind str =
             Html.div
-                [ Attributes.class kind ]
+                [ Attributes.class kind
+                , Attributes.class "message"
+                ]
                 [ Html.text str ]
     in
     case model.footer of
         Hint str ->
-            txt "footer_hint" str
+            txt "hint" str
 
         Url str ->
-            txt "footer_url" str
+            txt "url" str
 
         Title str ->
-            txt "footer_title" str
+            txt "title" str
 
 
 displayMessage : Kind -> List (Html.Attribute Msg)
@@ -1383,11 +1374,10 @@ windowDecoder =
 
 tabDecoder : Decode.Decoder TabInfos
 tabDecoder =
-    Decode.map7 TabInfos
+    Decode.map6 TabInfos
         (Decode.field "id" Decode.int)
         (Decode.field "url" Decode.string)
         (Decode.maybe (Decode.field "favIconUrl" Decode.string))
         (Decode.field "title" Decode.string)
-        (Decode.field "selected" Decode.bool)
         (Decode.field "pinned" Decode.bool)
         (Decode.field "windowId" Decode.int)

@@ -1,11 +1,15 @@
 function onLoad() {
-  chrome.runtime.sendMessage({"task":"init"}, function(response){
+  browser.runtime.sendMessage({"task":"init"}, function(response){
+    document.body.addEventListener("dragstart", function(event) { // Allows dragging in Firefox
+      event.dataTransfer.setData("text/plain", null);
+    });
+    
     var app = Elm.Main.init({
-      node: document.getElementById('elm'),
+      node: document.getElementById("elm"),
       flags: {windows: response.windows, visited: response.visited}
     });
     
-    chrome.runtime.onMessage.addListener(
+    browser.runtime.onMessage.addListener(
       function(message, sender, sendResponse) {
         switch (message.task) {
         case "newTree":
@@ -16,50 +20,54 @@ function onLoad() {
     );
   
     app.ports.createTab.subscribe(function(windowId) {
-      chrome.runtime.sendMessage({"task":"createTab", "windowId":windowId});
+      browser.runtime.sendMessage({"task":"createTab", "windowId":windowId});
     });
   
     app.ports.createWindow.subscribe(function() {
-      chrome.runtime.sendMessage({"task":"createWindow"});
+      browser.runtime.sendMessage({"task":"createWindow"});
     });
   
     app.ports.removeTabs.subscribe(function(tabIds) {
-      chrome.runtime.sendMessage({"task":"removeTabs", "tabIds":tabIds});
+      browser.runtime.sendMessage({"task":"removeTabs", "tabIds":tabIds});
     });
   
     app.ports.extractTabs.subscribe(function(tabIds) {
-      chrome.runtime.sendMessage({"task":"extractTabs", "tabIds":tabIds});
+      browser.runtime.sendMessage({"task":"extractTabs", "tabIds":tabIds});
     });
   
     app.ports.sortTabs.subscribe(function(tabIds) {
-      chrome.runtime.sendMessage({"task":"sortTabs", "tabIds":tabIds});
+      browser.runtime.sendMessage({"task":"sortTabs", "tabIds":tabIds});
     });
   
     app.ports.pinTabs.subscribe(function(tabIds) {
-      chrome.runtime.sendMessage({"task":"pinTabs", "tabIds":tabIds});
+      browser.runtime.sendMessage({"task":"pinTabs", "tabIds":tabIds});
     });
   
     app.ports.focusWindow.subscribe(function(windowId) {
-      chrome.runtime.sendMessage({"task":"focusWindow", "windowId":windowId});
+      browser.runtime.sendMessage({"task":"focusWindow", "windowId":windowId});
       window.close();
     });
   
     app.ports.focusTab.subscribe(function(tabId) {
-      chrome.runtime.sendMessage({"task":"focusTab", "tabId":tabId});
+      browser.runtime.sendMessage({"task":"focusTab", "tabId":tabId});
       window.close();
     });
   
     app.ports.moveTabs.subscribe(function(arg) {
       var [tabIds, windowId, index] = arg;
-      chrome.runtime.sendMessage({"task":"moveTabs", "tabIds":tabIds, "windowId":windowId, "index":index});
+      browser.runtime.sendMessage({"task":"moveTabs", "tabIds":tabIds, "windowId":windowId, "index":index});
     });
 
     app.ports.removeDuplicates.subscribe(function(tabIds) {
-      chrome.runtime.sendMessage({"task":"removeDuplicates", "tabIds":tabIds});
+      browser.runtime.sendMessage({"task":"removeDuplicates", "tabIds":tabIds});
     });
   }); 
 }
 
 document.addEventListener("DOMContentLoaded", function() {
   onLoad();
+});
+
+window.addEventListener("unload", function() {
+  browser.runtime.sendMessage({"task":"popupInactive"});
 });
