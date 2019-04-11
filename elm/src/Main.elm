@@ -401,7 +401,15 @@ update msg model =
                     )
 
         MouseOverFavicons bool ->
-            ( { model | mouseOverFavicons = bool }
+            let
+                footer =
+                    if bool then
+                        Hint "Click to make this the new selection"
+
+                    else
+                        Hint ""
+            in
+            ( { model | mouseOverFavicons = bool, footer = footer }
             , Cmd.none
             )
 
