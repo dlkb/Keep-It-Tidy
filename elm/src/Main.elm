@@ -688,14 +688,17 @@ viewBrowser model =
     let
         createWindow =
             Html.div
-                ([ Attributes.class "createWindow"
-                 , Events.onClick CreateWindow
-                 , Events.on "drop" (Decode.succeed (Execute Extract))
-                 ]
-                    ++ displayMessage (Hint "Open a new window")
-                    ++ dropzonable
-                )
-                []
+                [ Attributes.class "createWindow_container" ]
+                [ Html.div
+                    ([ Attributes.class "createWindow"
+                     , Events.onClick CreateWindow
+                     , Events.on "drop" (Decode.succeed (Execute Extract))
+                     ]
+                        ++ displayMessage (Hint "Open a new window")
+                        ++ dropzonable
+                    )
+                    []
+                ]
 
         windows =
             List.map (viewWindow model) model.windows

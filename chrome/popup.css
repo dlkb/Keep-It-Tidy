@@ -1,60 +1,59 @@
 body {
   background-color: #f6f6f6;
-  margin: 0;
-  height: 550px;
-  width: 750px;
+  height: 555px;
+  width: 755px;
+  margin: 0px;
   user-select: none;
+  font-family: Cantarell, Arial, sans-serif;
 }
 .popup {
   display: flex;
-  flex-flow: column nowrap;
-  width: inherit;
-  height: inherit;
+  flex-flow: column;
 }
 .main {
   display: flex;
-  flex-flow: row nowrap;
-  width: inherit;
-  height: inherit;
+  height: 527px;
 }
 .left {
-  width: 300px;
   overflow-y: scroll;
   display: flex;
+  scrollbar-width: none;
+  width: 234px;
 }
-.left::-webkit-scrollbar {
+::-webkit-scrollbar {
   display: none;
 }
-.right {
+.browser {
+  display: flex;
   flex: 1;
+  flex-flow: column;
+}
+.right {
   border-left: 1px solid black;
   display: flex;
   flex-flow: column;
-  width: 450px;
-}
-.browser {
   flex: 1;
 }
 .footer {
   border-top: 1px solid;
-  padding: 2px;
   display: flex;
-  flex-flow: row;
-  align-items: stretch;
+  height: 27px;
   justify-content: center;
-  font-size: 16px;
-  height: 20px;
+  align-items: center;
   overflow: hidden;
   white-space: nowrap;
 }
-.footer_hint {
+.message {
+  display: flex;
+} 
+.message.hint {
   font-size: 15px;
   font-weight: bold;
 }
-.footer_url {
-  font-size: 14px; 
+.message.url {
+  font-size: 14px;
 }
-.footer_title {
+.message.title {
   font-size: 16px;
 }
 .createWindow {
@@ -154,6 +153,8 @@ body {
   padding-left: 4px;
 }
 .row1 {
+  display: flex;
+  flex-flow: column;
 }
 .row2 {
   display: flex;
@@ -169,32 +170,32 @@ body {
   padding: 6px 0 6px 0;
 }
 .toolbar_separator {
-  background: -webkit-linear-gradient(left, transparent, black, transparent);
+  background: linear-gradient(to right, transparent, black, transparent);
   height: 1px;
 }
 .search {
-  width: 100%;
+  flex: 1;
   height: 30px;
   outline: none;
   font-size: 20px;
   color: #363636;
   background: none;
-  padding-right: 29px;
   border-style: solid;
   border-width: 0 0 1px 0;
   border-color: black;
+  padding-right: 24px;
+}
+.search_container {
+  display: flex;
 }
 .clearSearch {
-  width: 24px;
-  height: 24px;
-	position: absolute;
-	right: 6px;
-	top: 4px;
+  width: 30px;
+  height: 30px;
   background-size: 20px 20px;
   background-repeat: no-repeat;
   background-position: center;
   background-image: url("/img/pacman.png");
-  margin-left: 5px;
+  margin-left: -24px;
   cursor: pointer;
 }
 .editSelection {
@@ -288,7 +289,6 @@ body {
   background-size: 16px 16px;
   background-repeat: no-repeat;
   background-position: center;
-  background-color: white;
 }
 .preview_brace {
   min-width: 12px;
@@ -355,27 +355,10 @@ body {
 .action.remove_duplicates {
   background-image: url("/img/x1-128.png");
 }
-.selection {
-}
 .selection_container {
   flex: 1;
   overflow-y: scroll;
-}
-::-webkit-scrollbar {
-  width: 10px;
-}
-::-webkit-scrollbar-thumb {
-  border: 3px solid rgba(0, 0, 0, 0);
-  background-clip: padding-box;
-  border-radius: 7px;
-  background-color: rgba(0, 0, 0, 0.15);
-  box-shadow: inset -1px -1px 0px rgba(0, 0, 0, 0.05), inset 1px 1px 0px rgba(0, 0, 0, 0.05);
-}
-::-webkit-scrollbar-button {
-  display: none;
-}
-::-webkit-scrollbar-corner {
-  background-color: transparent;
+  scrollbar-width: none;
 }
 .item {
   display: flex;
@@ -393,7 +376,6 @@ body {
   background-size: 20px 20px;
   background-repeat: no-repeat;
   background-position: center;
-  background-color: white;
   margin: 0 2px 0 2px;
   cursor: pointer;
 }
@@ -415,6 +397,10 @@ body {
   border-radius: 4px;
   padding: 0 5px 0 5px;
   color: #363636;
+}
+input[type=checkbox] {
+  transform: scale(0.8);
+  margin: 0px;
 }
 .item_checkbox {
   width: 26px;

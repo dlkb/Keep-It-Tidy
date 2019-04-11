@@ -8,18 +8,25 @@ body {
 }
 .popup {
   display: flex;
-  flex-flow: column nowrap;
+  flex-flow: column;
 }
 .main {
   display: flex;
-  flex-flow: row nowrap;
   height: 527px;
 }
 .left {
   overflow-y: scroll;
-  scrollbar-width: none;
   display: flex;
+  scrollbar-width: none;
   width: 234px;
+}
+::-webkit-scrollbar {
+  display: none;
+}
+.browser {
+  display: flex;
+  flex: 1;
+  flex-flow: column;
 }
 .right {
   border-left: 1px solid black;
@@ -29,15 +36,15 @@ body {
 }
 .footer {
   border-top: 1px solid;
-  display: inline-block;
+  display: flex;
+  height: 27px;
+  justify-content: center;
+  align-items: center;
   overflow: hidden;
   white-space: nowrap;
 }
 .message {
-  vertical-align: middle;
-  display: inline-block;
-  text-align: center;
-  width: 100%;
+  display: flex;
 } 
 .message.hint {
   font-size: 15px;
@@ -176,6 +183,7 @@ body {
   border-style: solid;
   border-width: 0 0 1px 0;
   border-color: black;
+  padding-right: 24px;
 }
 .search_container {
   display: flex;
@@ -281,7 +289,6 @@ body {
   background-size: 16px 16px;
   background-repeat: no-repeat;
   background-position: center;
-  background-color: white;
 }
 .preview_brace {
   min-width: 12px;
@@ -369,7 +376,6 @@ body {
   background-size: 20px 20px;
   background-repeat: no-repeat;
   background-position: center;
-  background-color: white;
   margin: 0 2px 0 2px;
   cursor: pointer;
 }
