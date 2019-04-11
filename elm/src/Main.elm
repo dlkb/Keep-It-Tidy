@@ -404,7 +404,7 @@ update msg model =
             let
                 footer =
                     if bool then
-                        Hint "Click to make this the new selection"
+                        Hint "Click to make these tabs the new selection"
 
                     else
                         Hint ""
