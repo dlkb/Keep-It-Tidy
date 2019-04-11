@@ -1,0 +1,425 @@
+body {
+  background-color: #f6f6f6;
+  height: 555px;
+  width: 755px;
+  margin: 0px;
+  user-select: none;
+  font-family: Cantarell, Arial, sans-serif;
+}
+.popup {
+  display: flex;
+  flex-flow: column;
+}
+.main {
+  display: flex;
+  height: 527px;
+}
+.left {
+  overflow-y: scroll;
+  display: flex;
+  scrollbar-width: none;
+  width: 234px;
+}
+::-webkit-scrollbar {
+  display: none;
+}
+.browser {
+  display: flex;
+  flex: 1;
+  flex-flow: column;
+}
+.right {
+  border-left: 1px solid black;
+  display: flex;
+  flex-flow: column;
+  flex: 1;
+}
+.footer {
+  border-top: 1px solid;
+  display: flex;
+  height: 27px;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.message {
+  display: flex;
+} 
+.message.hint {
+  font-size: 15px;
+  font-weight: bold;
+}
+.message.url {
+  font-size: 14px;
+}
+.message.title {
+  font-size: 16px;
+}
+.createWindow {
+  width: 20px;
+  height: 20px;
+  background-size: 16px 16px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: white;
+  margin: 5px 3px 3px 6px;
+  padding: 2px;
+  background-image: url("/img/new-128.png");
+  border: 1px solid grey;
+  cursor: pointer;
+}
+.window {
+  padding: 2px 0 2px 5px;
+	border-bottom: 1px solid black;
+}
+.window:last-child {
+	border-bottom-width: 0;
+}
+.window.incognito {
+  background-image: url("/img/incognito.png");
+  background-repeat: no-repeat;
+  background-position: 50% 100%;
+  background-size: 40px 40px;
+}
+.tabs_container {
+  display: flex;
+  flex-flow: row wrap;
+}
+.createTab {
+  width: 20px;
+  height: 20px;
+  background-size: 16px 16px;
+  background-repeat: no-repeat;
+  background-position: center;
+	background-color: white;
+  margin: 3px;
+  padding: 2px;
+  background-image: url("/img/new-128.png");
+  border: 1px solid grey;
+  cursor: pointer;
+}
+.window_footer {
+  display: flex;
+  flex-flow: row nowrap;
+  justify-content: flex-end;
+}
+.selectTabs {
+  width: 24px;
+	height: 24px;
+	border: 1px solid grey;
+  background-size: 19px 19px;
+  background-repeat: no-repeat;
+  background-position: center;
+	background-image: url("/img/asterisk-white-128.png");
+  margin-right: 2px;
+  cursor: pointer;
+}
+.selectTabs:hover {
+	background-color: yellow;
+}
+.tab {
+  width: 22px;
+  height: 22px;
+  border: 1px solid grey;
+  border-radius: 3px;
+	padding: 2px;
+  margin: 2px;
+  background-size: 18px 18px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: white;
+  cursor: pointer;
+}
+.tab.selected {
+  border-color: #c43926;
+  border-width: 3px;
+  padding: 0px;
+}
+.tab.mouseover {
+  background-color: yellow;
+}
+.tab.pinned {
+  border-style: outset;
+}
+.tab.checked {
+  background-color: yellow;
+}
+.tab.spotlight {
+  background-color: black;
+}
+.toolbar {
+  padding-right: 4px;
+  padding-left: 4px;
+}
+.row1 {
+  display: flex;
+  flex-flow: column;
+}
+.row2 {
+  display: flex;
+  flex-flow: row wrap;
+  padding: 6px 0 6px 0;
+  justify-content: space-between;
+  border-bottom: 1px solid black;
+}
+.row3 {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  padding: 6px 0 6px 0;
+}
+.toolbar_separator {
+  background: linear-gradient(to right, transparent, black, transparent);
+  height: 1px;
+}
+.search {
+  flex: 1;
+  height: 30px;
+  outline: none;
+  font-size: 20px;
+  color: #363636;
+  background: none;
+  border-style: solid;
+  border-width: 0 0 1px 0;
+  border-color: black;
+  padding-right: 24px;
+}
+.search_container {
+  display: flex;
+}
+.clearSearch {
+  width: 30px;
+  height: 30px;
+  background-size: 20px 20px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-image: url("/img/pacman.png");
+  margin-left: -24px;
+  cursor: pointer;
+}
+.editSelection {
+  display: flex;
+  flex-flow: row nowrap;
+}
+.edit {
+  width: 20px;
+  height: 20px;
+  background-size: 18px 18px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: white;
+  margin-right: 3px;
+  padding: 2px;
+  border: 1px solid grey;
+  cursor: pointer;
+}
+.edit.all {
+  background-image: url("/img/asterisk-128.png");
+}
+.edit.empty {
+  background-image: url("/img/empty-128.png");
+}
+.edit.not {
+  background-image: url("/img/not-128.png");
+}
+.edit.similar {
+  background-image: url("/img/about-128.png");
+}
+.edit.uncheck {
+  background-image: url("/img/uncheck-128.png");
+}
+.sortSelection {
+  display: flex;
+  flex-flow: row;
+}
+.sort {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c43926;
+  background-color: white;
+  width: 60px;
+  height: 20px;
+  margin: 0;
+  padding: 2px;
+  font-size: 14px;
+  border-style: solid;
+  border-color: grey;
+  border-width: 1px 1px 1px 0;
+  text-align: center;
+  cursor: pointer;
+}
+.sort.selected {
+  background-color: #c43926;
+  color: white;
+}
+.sort:first-child {
+  border-width: 1px;
+}
+.preview {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  min-height: 44px;
+}
+.preview_tab {
+  width: 22px;
+  height: 22px;
+  border: 1px solid grey;
+  border-radius: 3px;
+	padding: 2px;
+  margin: 2px 2px 2px 6px;
+  background-size: 18px 18px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: white;
+}
+.preview_xtabs {
+  display: flex;
+  vertical-align: middle;
+  line-height: 32px;
+  font-size: 20px;
+}
+.preview_favicon {
+  width: 16px;
+  height: 16px;
+  margin: 1px 1px 1px 1px;
+  background-size: 16px 16px;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.preview_brace {
+  min-width: 12px;
+  background-size: 100% 100%;
+}
+.opening {
+  background-image: url("img/opening.svg");
+}
+.closing {
+  background-image: url("img/closing.svg");
+}
+.preview_brace.hidden {
+  background: none;
+}
+.preview_content {
+  display: flex;
+  min-height: 24px;
+  flex-flow: row wrap;
+  align-items: center;
+  justify-content: center;
+  border-style: dotted;
+  border-width: 1px;
+  border-color: grey;
+  border-radius: 3px;
+  padding: 5px;
+  margin: 0 3px 0 3px;
+  cursor: pointer;
+}
+.preview_content.text {
+  cursor: default;
+}
+.preview_content.none {
+  border: none;
+  min-height: 26px;
+}
+.executeAction {
+  display: flex;
+  flex-flow: row nowrap;
+}
+.action {
+  width: 20px;
+  height: 20px;
+  background-size: 18px 18px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: white;
+  margin-left: 3px;
+  padding: 2px;
+  border: 1px solid grey;
+  cursor: pointer;
+}
+.action.extract {
+  background-image: url("/img/lightning-128.png");
+}
+.action.delete {
+  background-image: url("/img/bin-128.png");
+}
+.action.sort {
+  background-image: url("/img/AZ-128.png");
+}
+.action.pin {
+  background-image: url("/img/pin-128.png");
+}
+.action.remove_duplicates {
+  background-image: url("/img/x1-128.png");
+}
+.selection_container {
+  flex: 1;
+  overflow-y: scroll;
+  scrollbar-width: none;
+}
+.item {
+  display: flex;
+  flex-flow: row nowrap;
+  height: 30px;
+  align-items: center;
+  cursor: default;
+}
+.item.checked {
+  background-color: yellow;
+}
+.item_favicon {
+  width: 20px;
+  height: 20px;
+  background-size: 20px 20px;
+  background-repeat: no-repeat;
+  background-position: center;
+  margin: 0 2px 0 2px;
+  cursor: pointer;
+}
+.item_brace {
+  height: 26px;
+  width: 12px;
+  background-size: 100% 100%;
+}
+.item_brace.hidden {
+  background: none;
+}
+.item_title {
+  flex: 1;
+  overflow: hidden;
+  background-color: white;
+  font-size: 14px;
+  height: 22px;
+  line-height: 22px;
+  border-radius: 4px;
+  padding: 0 5px 0 5px;
+  color: #363636;
+}
+input[type=checkbox] {
+  transform: scale(0.8);
+  margin: 0px;
+}
+.item_checkbox {
+  width: 26px;
+  height: 26px;
+  border-radius: 26px;
+  margin-left: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.item_remove {
+  width: 20px;
+  height: 20px;
+  background-size: 16px 16px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-image: url("/img/dot-128.png");
+  cursor: pointer;
+}
+.item_remove:hover {
+  background-image: url("/img/close-128.png");
+}
