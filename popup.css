@@ -398,9 +398,17 @@ body {
   padding: 0 5px 0 5px;
   color: #363636;
 }
-input[type=checkbox] {
-  transform: scale(0.8);
-  margin: 0px;
+.item_check.checked {
+  background-image: url("/img/check_mark-128.png");
+  background-size: 10px 10px;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.item_check {
+  background-color: white;
+  width: 12px;
+  height: 12px;
+  border: 1px solid grey;
 }
 .item_checkbox {
   width: 26px;

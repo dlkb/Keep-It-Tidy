@@ -1194,9 +1194,11 @@ viewItem model tab =
                 , Attributes.style "background-color" windowColor
                 , Events.onClick (CheckboxClick tab.id)
                 ]
-                [ Html.input
-                    [ Attributes.type_ "checkbox"
-                    , Attributes.checked tab.checked
+                [ Html.div
+                    [ Attributes.classList
+                        [ ( "item_check", True )
+                        , ( "checked", tab.checked )
+                        ]
                     ]
                     []
                 ]
