@@ -5,7 +5,9 @@ https://chrome.google.com/webstore/detail/top-tomato/ncjlgbnopdeldjbdbcpgdepfifh
 
 ## Compilation
 
+Make sure [elm](https://elm-lang.org/) is in your path then run:
+
 ```
-cd elm
-elm make src/Main.elm --output=popup.js --optimize && mv popup.js ../extension/
+./build.sh firefox
+./build.sh chrome
 ```
