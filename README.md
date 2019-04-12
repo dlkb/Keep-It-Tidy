@@ -1,7 +1,7 @@
 # Top Tomato
 Chrome Extension - Tab Manager
 
-https://chrome.google.com/webstore/detail/top-tomato/ncjlgbnopdeldjbdbcpgdepfifhpocip
+[Chrome Web Store](https://chrome.google.com/webstore/detail/top-tomato/ncjlgbnopdeldjbdbcpgdepfifhpocip)
 
 ## Compilation
 
