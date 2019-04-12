@@ -1,5 +1,5 @@
 # Top Tomato
-Chrome Extension - Tab Manager
+Chrome/Firefox Extension - Tab Manager
 
 [Chrome Web Store](https://chrome.google.com/webstore/detail/top-tomato/ncjlgbnopdeldjbdbcpgdepfifhpocip)
 
