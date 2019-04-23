@@ -31,7 +31,7 @@ You can assign a keyboard shortcut to Top Tomato: chrome://extensions/shortcuts
 
 ### Firefox
 
-Drag and drop doesn't work on wayland.
+Drag and drop doesn't work on Sway.
 
 
 ## Compilation
