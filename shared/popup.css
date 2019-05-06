@@ -1,7 +1,7 @@
 body {
   background-color: #f6f6f6;
   height: 555px;
-  width: 755px;
+  width: 800px;
   margin: 0px;
   user-select: none;
   font-family: Cantarell, Arial, sans-serif;
@@ -18,7 +18,7 @@ body {
   overflow-y: scroll;
   display: flex;
   scrollbar-width: none;
-  width: 234px;
+  width: 202px;
 }
 ::-webkit-scrollbar {
   display: none;
