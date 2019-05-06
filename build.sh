@@ -1,9 +1,10 @@
 #!/bin/sh
 
 # ./build.sh firefox, ./build.sh chrome
-cp -r _locales $1/
-cp -r img $1/
-cp popup.css $1/
+cp -r shared/_locales $1/
+cp -r shared/img $1/
+cp shared/popup.css $1/
+cp shared/popup.html $1/
 cd elm
 elm make src/Main.elm --output=popup.js --optimize
 cd ..
