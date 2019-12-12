@@ -13,7 +13,7 @@ Example: power rangers, superman, batman = (power AND rangers) OR superman OR ba
 
 If only one tab is selected, press Enter to focus this tab.
 
-Actions like "extract" or "inverse selection" apply to the whole selection unless there are checked tabs, in which case they apply to the subselection.
+Actions like "extract" or "invert selection" apply to the whole selection unless there are checked tabs, in which case they apply to the subselection.
 
 You can move tabs by dragging the "n x Tab" icon in the toolbar to a new position in the left panel. The selected tabs will be inserted before the tab you dropped the selection on.
 
