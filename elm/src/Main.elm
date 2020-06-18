@@ -746,7 +746,7 @@ viewWindow model window =
                 []
 
         tabs =
-            List.map (viewTab model) window.tabs
+            List.map viewTab window.tabs
 
         container =
             Html.div
@@ -768,8 +768,8 @@ viewWindow model window =
             [ container, footer ]
 
 
-viewTab : Model -> Tab -> Html Msg
-viewTab model tab =
+viewTab : Tab -> Html Msg
+viewTab tab =
     Html.div
         ([ Attributes.classList
             [ ( "tab", True )
@@ -814,13 +814,13 @@ viewToolbar model =
             ]
         , Html.div
             [ Attributes.class "row2" ]
-            [ viewEditSelection model
+            [ viewEditSelection
             , viewSortSelection model
             ]
         , Html.div
             [ Attributes.class "row3" ]
             [ viewPreview model
-            , viewExecuteAction model
+            , viewExecuteAction
             ]
         , Html.div
             [ Attributes.class "toolbar_separator" ]
@@ -851,8 +851,8 @@ viewInput model =
         ]
 
 
-viewEditSelection : Model -> Html Msg
-viewEditSelection model =
+viewEditSelection : Html Msg
+viewEditSelection =
     let
         edits =
             [ All, Empty, Not, Similar, Uncheck ]
@@ -1062,8 +1062,8 @@ viewPreviewHelp tab =
         []
 
 
-viewExecuteAction : Model -> Html Msg
-viewExecuteAction model =
+viewExecuteAction : Html Msg
+viewExecuteAction =
     let
         actions =
             [ Extract, Delete, Sort, Pin, RemoveDuplicates ]
