@@ -18,7 +18,7 @@ body {
   overflow-y: scroll;
   display: flex;
   scrollbar-width: none;
-  width: 202px;
+  width: 266px;
 }
 ::-webkit-scrollbar {
   display: none;
