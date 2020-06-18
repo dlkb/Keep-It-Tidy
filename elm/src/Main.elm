@@ -113,10 +113,6 @@ type Msg
     | EnterPressed
 
 
-type alias WindowsInfos =
-    { windows : List WindowInfos }
-
-
 type alias WindowInfos =
     { id : Int
     , incognito : Bool
@@ -513,10 +509,10 @@ onUpdatedTree toBeDecoded model =
                     value
 
                 Err _ ->
-                    WindowsInfos []
+                    []
 
         windows =
-            windowsInfos.windows
+            windowsInfos
                 |> List.indexedMap buildWindow
     in
     { model | windows = windows }
@@ -1371,9 +1367,9 @@ getTabIdsOfWindow model windowId =
 -- JSON
 
 
-windowsDecoder : Decode.Decoder WindowsInfos
+windowsDecoder : Decode.Decoder (List WindowInfos)
 windowsDecoder =
-    Decode.map WindowsInfos (Decode.list windowDecoder)
+    Decode.list windowDecoder
 
 
 windowDecoder : Decode.Decoder WindowInfos
