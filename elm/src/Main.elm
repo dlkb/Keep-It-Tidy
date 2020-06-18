@@ -765,7 +765,7 @@ viewWindow model window =
                 ]
             , Events.onDoubleClick (FocusWindow window.id)
             ]
-            ([ container ] ++ [ footer ])
+            [ container, footer ]
 
 
 viewTab : Model -> Tab -> Html Msg
@@ -1218,7 +1218,7 @@ viewItem model tab =
         , Events.onMouseEnter (MouseEnterItem tab.id tab.url)
         , Events.onMouseLeave (MouseLeaveItem tab.id)
         ]
-        ([ opening ] ++ [ favicon ] ++ [ closing ] ++ [ title ] ++ [ checkbox ] ++ [ remove ])
+        [ opening, favicon, closing, title, checkbox, remove ]
 
 
 viewFooter : Model -> Html Msg
