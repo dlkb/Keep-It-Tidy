@@ -11,7 +11,7 @@ import Ports
 import Regex
 import String
 
-
+main : Program Flags Model Msg
 main =
     Browser.element
         { init = init
