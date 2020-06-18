@@ -512,7 +512,7 @@ onUpdatedTree toBeDecoded model =
                 Ok value ->
                     value
 
-                Err error ->
+                Err _ ->
                     WindowsInfos []
 
         windows =
