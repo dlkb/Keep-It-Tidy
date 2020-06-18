@@ -709,15 +709,15 @@ viewBrowser model =
                 ]
 
         windows =
-            List.map (viewWindow model) model.windows
+            List.map viewWindow model.windows
     in
     Html.div
         [ Attributes.class "browser" ]
         (windows ++ [ createWindow ])
 
 
-viewWindow : Model -> Window -> Html Msg
-viewWindow model window =
+viewWindow : Window -> Html Msg
+viewWindow window =
     let
         selectTabs =
             Html.div
