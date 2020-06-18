@@ -635,7 +635,7 @@ selectSimilar model =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions _ =
     Sub.batch
         [ Ports.updatedTree UpdatedTree
         , Browser.Events.onKeyDown keyDecoder
