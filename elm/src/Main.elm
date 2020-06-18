@@ -577,16 +577,6 @@ setChecked bool tab =
     { tab | checked = bool }
 
 
-selectTabsInWindow : Window -> Window
-selectTabsInWindow window =
-    let
-        newTabs =
-            window.tabs
-                |> List.map (\tab -> { tab | selected = True })
-    in
-    { window | tabs = newTabs }
-
-
 invertSelection : Model -> Model
 invertSelection model =
     let
