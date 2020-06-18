@@ -11,6 +11,7 @@ import Ports
 import Regex
 import String
 
+
 main : Program Flags Model Msg
 main =
     Browser.element
@@ -1027,13 +1028,12 @@ viewPreview model =
             ]
             []
         , Html.div
-            ([ Attributes.classList
+            (Attributes.classList
                 [ ( "preview_content", True )
                 , ( "text", List.isEmpty checked )
                 , ( "none", List.isEmpty selected )
                 ]
-             ]
-                ++ events
+                :: events
             )
             content
         , Html.div
