@@ -3,10 +3,9 @@ port module Ports exposing
     , createWindow
     , extractTabs
     , focusTab
-    , focusWindow
     , moveTabs
+    , openUrl
     , pinTabs
-    , removeDuplicates
     , removeTabs
     , sortTabs
     , updatedTree
@@ -33,16 +32,13 @@ port sortTabs : List Int -> Cmd msg
 port pinTabs : List Int -> Cmd msg
 
 
-port focusWindow : Int -> Cmd msg
+port focusTab : ( Int, Int ) -> Cmd msg
 
 
-port focusTab : Int -> Cmd msg
+port openUrl : String -> Cmd msg
 
 
 port moveTabs : ( List Int, Int, Int ) -> Cmd msg
-
-
-port removeDuplicates : List Int -> Cmd msg
 
 
 

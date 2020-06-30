@@ -1,6 +1,9 @@
 {
   "extName": {
-    "message": "Top Tomato - Tab Manager"
+    "message": "Keep It Tidy - Tab Manager"
+  },
+  "extShortName": {
+    "message": "Keep It Tidy"
   },
   "extDesc": {
     "message": "Yet another Tab Manager."

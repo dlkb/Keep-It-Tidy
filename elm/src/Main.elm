@@ -8,7 +8,7 @@ import Html.Attributes as Attributes
 import Html.Events as Events
 import Json.Decode as Decode
 import Ports
-import Regex
+import Regex exposing (Regex)
 import String
 
 
@@ -24,38 +24,49 @@ main =
 
 type alias Model =
     { windows : List Window
-    , search : String -- search bar request
+    , search : String
     , sortBy : Sort
-    , footer : Kind -- hint, title or url
-    , mouseOverFavicons : Bool -- mouse over favicons in the toolbar
-    , visited : List Int -- last visited tabs
+    , footer : Kind
+    , visited : List TabId -- [last, next-to-last, ...]
+    , groupChecked : Bool -- stick selected tabs to the top of the list
     }
 
 
 type alias Window =
-    { id : Int
+    { id : WindowId
     , incognito : Bool
-    , focused : Bool
+    , tabs : List Tab
+    , enabled : Bool
     , color : String
     , index : Int
-    , tabs : List Tab
     }
 
 
 type alias Tab =
-    { id : Int
+    { id : TabId
     , url : String
     , faviconUrl : String
     , title : String
     , pinned : Bool
     , windowId : Int
-    , selected : Bool
-    , checked : Bool
-    , spotlight : Bool
-    , mouseOverItem : Bool -- mouse over list item representation of a tab
-    , mouseOverFavicon : Bool -- mouse over list item favicon
+    , active : Bool
+    , checked : CheckStatus
     , index : Int
     }
+
+
+type alias TabId =
+    Int
+
+
+type alias WindowId =
+    Int
+
+
+type CheckStatus
+    = NotChecked
+    | Checked
+    | CheckedFromSearch
 
 
 type Kind
@@ -66,16 +77,14 @@ type Kind
 
 type Sort
     = Visited
-    | Checked
     | Websites
     | Windows
 
 
 type Edit
-    = All
-    | Empty
-    | Not
+    = Not
     | Similar
+    | Duplicates
     | Uncheck
 
 
@@ -84,80 +93,75 @@ type Action
     | Delete
     | Sort
     | Pin
-    | RemoveDuplicates
 
 
 type Msg
     = NoOp
-    | MouseEnterItem Int String -- an item is a tab in the selection (right): tabId, Url
-    | MouseLeaveItem Int
-    | MouseOverFavicon Int Bool
-    | CheckboxClick Int
-    | TabClick Int
+    | CheckboxClick Tab
+    | TabClick Tab
     | SortBy Sort
-    | Search String
+    | GroupCheckedClick
+    | SearchInput String
     | ClearSearch
     | CreateWindow
-    | CreateTab Int -- windowId
-    | SelectTabs Int -- windowId
+    | CreateTab Window
+    | ToggleWindow Window
+    | ToggleWindows
     | Execute Action
     | Apply Edit
-    | MouseOverFavicons Bool -- mouse over favicons in preview (toolbar)
-    | FaviconClick Int -- favicon of an item
-    | RemoveClick Int
     | UpdatedTree String -- String is a JSON encoded string
-    | FaviconsClick
-    | FocusWindow Int
-    | FocusTab Int
+    | FocusTab Tab
     | SetMessage Kind
-    | Drop Int Int -- windowId, index
+    | Drop WindowId Int
     | EnterPressed
 
 
 type alias WindowInfos =
-    { id : Int
+    { id : WindowId
     , incognito : Bool
-    , focused : Bool
     , tabsInfos : List TabInfos
     }
 
 
 type alias TabInfos =
-    { id : Int
+    { id : TabId
     , url : String
     , faviconUrl : Maybe String
     , title : String
     , pinned : Bool
-    , windowId : Int
+    , windowId : WindowId
+    , active : Bool
     }
 
 
 type alias Flags =
     { windows : String
-    , visited : List Int
+    , visited : List TabId
     }
 
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
     let
-        model =
-            Model [] "" Visited (Hint "Welcome!") False flags.visited
+        initModel =
+            Model [] "" Visited (Hint "Welcome!") flags.visited False
 
-        model1 =
-            onUpdatedTree flags.windows model
+        buildTheTree m =
+            onUpdatedTree flags.windows m
 
-        model2 =
-            updateTabsField (getTabIds model1) (setSelected True) model1
+        enableAllWindows m =
+            { m | windows = List.map (\window -> { window | enabled = True }) m.windows }
     in
-    ( model2, Cmd.none )
+    ( initModel |> buildTheTree |> enableAllWindows
+    , Cmd.none
+    )
 
 
 buildWindow : Int -> WindowInfos -> Window
-buildWindow index { id, incognito, focused, tabsInfos } =
+buildWindow index { id, incognito, tabsInfos } =
     let
         colors =
-            Array.fromList [ "SlateBlue", "MediumAquaMarine", "SkyBlue", "DeepPink", "SlateGray", "Coral", "Olive", "Peru", "Navy", "PaleVioletRed" ]
+            Array.fromList [ "MediumAquaMarine", "MediumSlateBlue", "Coral", "SkyBlue", "DeepPink", "SlateGray", "Chartreuse", "SandyBrown", "DarkViolet", "DodgerBlue", "PaleVioletRed", "#39689a", "#96ff98", "#b63c77" ]
 
         color =
             Array.get (modBy (Array.length colors) index) colors
@@ -168,35 +172,34 @@ buildWindow index { id, incognito, focused, tabsInfos } =
                     c
 
                 Nothing ->
-                    "Gray"
+                    "Black"
     in
     { id = id
     , incognito = incognito
-    , focused = focused
+    , tabs = List.indexedMap buildTab tabsInfos
+    , enabled = False
     , color = picked
     , index = index
-    , tabs = List.indexedMap buildTab tabsInfos
     }
 
 
 buildTab : Int -> TabInfos -> Tab
-buildTab index { id, url, faviconUrl, title, pinned, windowId } =
+buildTab index { id, url, faviconUrl, title, pinned, windowId, active } =
     let
         default =
-            "img/default_favicon.png"
+            "img/favicon-16.png"
 
         fav =
-            case faviconUrl of
-                Just value ->
-                    if String.left 15 value == "chrome://theme/" then
-                        -- We can't load these urls
+            if String.left 4 url /= "http" then
+                default
+
+            else
+                case faviconUrl of
+                    Just favUrl ->
+                        favUrl
+
+                    Nothing ->
                         default
-
-                    else
-                        value
-
-                Nothing ->
-                    default
     in
     { id = id
     , url = url
@@ -204,11 +207,8 @@ buildTab index { id, url, faviconUrl, title, pinned, windowId } =
     , title = title
     , pinned = pinned
     , windowId = windowId
-    , selected = False
-    , checked = False
-    , spotlight = False
-    , mouseOverItem = False
-    , mouseOverFavicon = False
+    , active = active
+    , checked = NotChecked
     , index = index
     }
 
@@ -219,42 +219,20 @@ update msg model =
         NoOp ->
             ( model, Cmd.none )
 
-        MouseEnterItem tabId url ->
+        CheckboxClick tab ->
+            ( model |> updateTabs [ tab.id ] toggleChecked |> fossilizeSelection
+            , Cmd.none
+            )
+
+        TabClick tab ->
             let
-                model1 =
-                    { model | footer = Url url }
+                enableWindow =
+                    enableWindows [ tab.windowId ]
+
+                updateTab =
+                    updateTabs [ tab.id ] toggleChecked
             in
-            ( updateTabsField [ tabId ] (setSpotlight True) model1
-            , Cmd.none
-            )
-
-        MouseLeaveItem tabId ->
-            let
-                model1 =
-                    { model | footer = Hint "" }
-            in
-            ( updateTabsField [ tabId ] (setSpotlight False) model1
-            , Cmd.none
-            )
-
-        MouseOverFavicon tabId bool ->
-            ( updateTabsField [ tabId ] (setMouseOverFavicon bool) model
-            , Cmd.none
-            )
-
-        CheckboxClick tabId ->
-            let
-                model1 =
-                    model
-                        |> updateTabsField [ tabId ] toggleChecked
-                        |> updateTabsField [ tabId ] (setSpotlight False)
-            in
-            ( model1
-            , Cmd.none
-            )
-
-        TabClick tabId ->
-            ( updateTabsField [ tabId ] toggleSelected model
+            ( model |> enableWindow |> updateTab |> fossilizeSelection
             , Cmd.none
             )
 
@@ -263,16 +241,13 @@ update msg model =
             , Cmd.none
             )
 
-        Search string ->
+        GroupCheckedClick ->
+            ( { model | groupChecked = not model.groupChecked, footer = messageGroupChecked (not model.groupChecked) }
+            , Cmd.none
+            )
+
+        SearchInput string ->
             let
-                regexify str =
-                    case Regex.fromString str of
-                        Just r ->
-                            r
-
-                        Nothing ->
-                            Regex.never
-
                 words =
                     string
                         |> Regex.replace (regexify "^ *") (\_ -> "")
@@ -285,7 +260,7 @@ update msg model =
                         False
 
                     else
-                        String.contains (String.toLower word) (String.toLower (tab.url ++ " " ++ tab.title))
+                        String.contains (String.toLower word) (String.toLower <| tab.url ++ " " ++ tab.title)
 
                 match tab =
                     -- expl: SUPERMAN, BATMAN, POWER RANGERS = SUPERMAN or BATMAN or (POWER and RANGERS)
@@ -293,26 +268,59 @@ update msg model =
                         |> List.map (List.foldl (&&) True)
                         |> List.foldl (||) False
 
-                tabIds =
-                    getSelected model
-                        |> List.filter match
-                        |> List.map .id
+                -- Enable all windows in case the user has forgotten to enable any window
+                enableAllIfNone m =
+                    if List.isEmpty (getEnabledWindows m) then
+                        enableWindows (List.map .id m.windows) m
 
-                allTabIds =
-                    getSelected model
-                        |> List.map .id
+                    else
+                        m
 
-                model1 =
-                    model
-                        |> updateTabsField allTabIds (setChecked False)
-                        |> updateTabsField tabIds (setChecked True)
+                updateSearchResults m =
+                    let
+                        lastSearchResults =
+                            getCheckedFromSearch m
+                                |> List.map .id
+
+                        searchResults =
+                            getSelection m
+                                |> List.filter match
+                                |> List.map .id
+
+                        f tab =
+                            -- We don't overwrite the check status of manually checked tabs
+                            if tab.checked == Checked then
+                                tab
+
+                            else
+                                { tab | checked = CheckedFromSearch }
+                    in
+                    m
+                        |> updateTabs lastSearchResults (setChecked NotChecked)
+                        |> updateTabs searchResults f
+
+                updateField m =
+                    { m | search = string }
+
+                moveSelectionTop m =
+                    { m | groupChecked = True }
             in
-            ( { model1 | search = string, sortBy = Checked }
+            ( model |> updateField |> enableAllIfNone |> moveSelectionTop |> updateSearchResults
             , Cmd.none
             )
 
         ClearSearch ->
-            ( clearSearch model
+            let
+                clearField m =
+                    { m | search = "" }
+
+                uncheckMatches m =
+                    updateTabs
+                        (getCheckedFromSearch m |> List.map .id)
+                        (setChecked NotChecked)
+                        m
+            in
+            ( model |> clearField |> uncheckMatches
             , Cmd.none
             )
 
@@ -321,150 +329,107 @@ update msg model =
             , Ports.createWindow ()
             )
 
-        CreateTab windowId ->
+        CreateTab window ->
             ( model
-            , Ports.createTab windowId
+            , Ports.createTab window.id
             )
 
-        SelectTabs windowId ->
+        ToggleWindow window ->
             let
-                model1 =
-                    model
-                        |> updateTabsField (getTabIds model) (setSelected False)
-                        |> updateTabsField (getTabIdsOfWindow model windowId) (setSelected True)
-                        |> clearSearch
+                updateMessage m =
+                    { m | footer = messageToggleWindow <| not window.enabled }
             in
-            ( model1
+            ( model |> toggleWindow window.id |> updateMessage |> fossilizeSelection
+            , Cmd.none
+            )
+
+        ToggleWindows ->
+            let
+                enabledWindows =
+                    model.windows
+                        |> List.filter .enabled
+                        |> List.map .id
+
+                allWindows =
+                    model.windows
+                        |> List.map .id
+
+                toggleWindows =
+                    if allWindows /= enabledWindows then
+                        enableWindows allWindows
+
+                    else
+                        disableWindows enabledWindows
+
+                updateMessage m =
+                    { m | footer = messageToggleWindows <| enabledWindows == allWindows }
+            in
+            ( model |> toggleWindows |> updateMessage |> fossilizeSelection
             , Cmd.none
             )
 
         Execute action ->
-            case action of
-                Extract ->
-                    ( model
-                    , Ports.extractTabs (getPertinentSelection model)
-                    )
+            let
+                selection =
+                    List.map .id (getChecked model)
+            in
+            if List.isEmpty selection then
+                ( model
+                , Cmd.none
+                )
 
-                Delete ->
-                    ( model
-                    , Ports.removeTabs (getPertinentSelection model)
-                    )
+            else
+                case action of
+                    Extract ->
+                        ( model
+                        , Ports.extractTabs selection
+                        )
 
-                Sort ->
-                    ( model
-                    , Ports.sortTabs (getPertinentSelection model)
-                    )
+                    Delete ->
+                        ( model
+                        , Ports.removeTabs selection
+                        )
 
-                Pin ->
-                    ( model
-                    , Ports.pinTabs (getPertinentSelection model)
-                    )
+                    Sort ->
+                        ( model
+                        , Ports.sortTabs selection
+                        )
 
-                RemoveDuplicates ->
-                    ( model
-                    , Ports.removeDuplicates (getPertinentSelection model)
-                    )
+                    Pin ->
+                        ( model
+                        , Ports.pinTabs selection
+                        )
 
         Apply edit ->
             case edit of
-                All ->
-                    ( updateTabsField (getTabIds model) (setSelected True) model
-                        |> clearSearch
-                    , Cmd.none
-                    )
-
-                Empty ->
-                    ( updateTabsField (getTabIds model) (setSelected False) model
-                        |> clearSearch
-                    , Cmd.none
-                    )
-
                 Not ->
-                    ( invertSelection model
-                        |> clearSearch
+                    ( model |> invertSelection |> fossilizeSelection
                     , Cmd.none
                     )
 
                 Similar ->
-                    ( selectSimilar model
-                        |> clearSearch
+                    ( model |> selectSimilar |> fossilizeSelection
+                    , Cmd.none
+                    )
+
+                Duplicates ->
+                    ( model |> selectDuplicates |> fossilizeSelection
                     , Cmd.none
                     )
 
                 Uncheck ->
-                    ( updateTabsField (getTabIds model) (setChecked False) model
-                        |> clearSearch
+                    ( model |> uncheckAll |> fossilizeSelection
                     , Cmd.none
                     )
 
-        MouseOverFavicons bool ->
-            let
-                footer =
-                    if bool then
-                        Hint "Click to make these tabs the new selection"
-
-                    else
-                        Hint ""
-            in
-            ( { model | mouseOverFavicons = bool, footer = footer }
-            , Cmd.none
-            )
-
-        FaviconClick tabId ->
-            let
-                model1 =
-                    model
-                        |> updateTabsField (getTabIds model) (setSelected False)
-                        |> updateTabsField [ tabId ] (setSelected True)
-                        |> updateTabsField [ tabId ] (setMouseOverFavicon False)
-                        |> updateTabsField [ tabId ] (setSpotlight False)
-                        |> clearSearch
-            in
-            ( model1
-            , Cmd.none
-            )
-
-        RemoveClick tabId ->
-            let
-                model1 =
-                    model
-                        |> updateTabsField [ tabId ] (setSelected False)
-                        |> updateTabsField [ tabId ] (setSpotlight False)
-            in
-            ( { model1 | footer = Hint "" }
-            , Cmd.none
-            )
-
         UpdatedTree toBeDecoded ->
-            ( onUpdatedTree toBeDecoded model
+            ( model |> onUpdatedTree toBeDecoded
             , Cmd.none
             )
 
-        FaviconsClick ->
-            let
-                toBeSelected =
-                    getChecked model
-                        |> List.map .id
-
-                model1 =
-                    model
-                        |> updateTabsField (getTabIds model) (setSelected False)
-                        |> updateTabsField toBeSelected (setSelected True)
-                        |> clearSearch
-            in
-            ( { model1 | mouseOverFavicons = False }
-              -- the mouseleave event doesn't fire when we remove the favicons
-            , Cmd.none
-            )
-
-        FocusWindow windowId ->
+        FocusTab tab ->
             ( model
-            , Ports.focusWindow windowId
-            )
-
-        FocusTab tabId ->
-            ( model
-            , Ports.focusTab tabId
+            , Ports.focusTab ( tab.id, tab.windowId )
             )
 
         SetMessage message ->
@@ -474,33 +439,53 @@ update msg model =
 
         Drop windowId index ->
             ( model
-            , Ports.moveTabs ( getPertinentSelection model, windowId, index )
+            , Ports.moveTabs ( List.map .id (getChecked model), windowId, index )
             )
 
         EnterPressed ->
             let
-                sel =
-                    getPertinentSelection model
+                checked =
+                    getChecked model
 
-                first =
-                    List.head sel
+                checkedFromSearch =
+                    getCheckedFromSearch model
             in
-            if List.length sel == 1 then
-                -- if only one tab is selected
-                case first of
-                    Just tabId ->
-                        ( model, Ports.focusTab tabId )
+            if List.length checkedFromSearch == 0 && model.search /= "" then
+                ( model
+                , Ports.openUrl ("https://www.google.com/search?q=" ++ model.search)
+                )
+
+            else if List.length checked == 1 then
+                case List.head checked of
+                    Just tab ->
+                        ( model
+                        , Ports.focusTab ( tab.id, tab.windowId )
+                        )
 
                     Nothing ->
-                        ( model, Cmd.none )
+                        ( model
+                        , Cmd.none
+                        )
 
             else
-                ( model, Cmd.none )
+                ( model
+                , Cmd.none
+                )
 
 
 onUpdatedTree : String -> Model -> Model
 onUpdatedTree toBeDecoded model =
     let
+        enabledWindows =
+            List.filter .enabled model.windows
+                |> List.map .id
+
+        checked =
+            List.map .id (getChecked model)
+
+        checkedFromSearch =
+            List.map .id (getCheckedFromSearch model)
+
         decoded =
             Decode.decodeString windowsDecoder toBeDecoded
 
@@ -512,15 +497,36 @@ onUpdatedTree toBeDecoded model =
                 Err _ ->
                     []
 
-        windows =
-            windowsInfos
-                |> List.indexedMap buildWindow
+        updateTree m =
+            { m | windows = List.indexedMap buildWindow windowsInfos }
+
+        restoreState m =
+            let
+                restoreWindow window =
+                    if List.member window.id enabledWindows then
+                        { window | enabled = True }
+
+                    else
+                        { window | enabled = False }
+
+                restoreTab tab =
+                    if List.member tab.id checkedFromSearch && List.member tab.windowId enabledWindows then
+                        { tab | checked = CheckedFromSearch }
+
+                    else if List.member tab.id checked && List.member tab.windowId enabledWindows then
+                        { tab | checked = Checked }
+
+                    else
+                        { tab | checked = NotChecked }
+            in
+            updateWindows (List.map .id m.windows) restoreWindow m
+                |> updateTabs (getTabIds m) restoreTab
     in
-    { model | windows = windows }
+    model |> updateTree |> restoreState
 
 
-updateTabsField : List Int -> (Tab -> Tab) -> Model -> Model
-updateTabsField tabIds f model =
+updateTabs : List TabId -> (Tab -> Tab) -> Model -> Model
+updateTabs tabIds f model =
     let
         updateTab tab =
             if List.member tab.id tabIds then
@@ -536,102 +542,182 @@ updateTabsField tabIds f model =
     { model | windows = windows }
 
 
-clearSearch : Model -> Model
-clearSearch model =
-    { model | search = "" }
+enableWindows : List WindowId -> Model -> Model
+enableWindows windowIds model =
+    let
+        updateWindow window =
+            { window | enabled = True }
+    in
+    updateWindows windowIds updateWindow model
 
 
-toggleSelected : Tab -> Tab
-toggleSelected tab =
-    { tab
-        | selected = not tab.selected
-        , checked = False
-    }
+disableWindows : List WindowId -> Model -> Model
+disableWindows windowIds model =
+    let
+        updateWindow window =
+            let
+                updatedTabs =
+                    List.map (\tab -> { tab | checked = NotChecked }) window.tabs
+            in
+            { window | enabled = False, tabs = updatedTabs }
+    in
+    updateWindows windowIds updateWindow model
+
+
+toggleWindow : WindowId -> Model -> Model
+toggleWindow windowId model =
+    let
+        updateWindow window =
+            let
+                tabs =
+                    if window.enabled then
+                        List.map (\tab -> { tab | checked = NotChecked }) window.tabs
+
+                    else
+                        window.tabs
+            in
+            { window | enabled = not window.enabled, tabs = tabs }
+    in
+    updateWindows [ windowId ] updateWindow model
+
+
+updateWindows : List WindowId -> (Window -> Window) -> Model -> Model
+updateWindows windowIds f model =
+    let
+        updateWindow window =
+            if List.member window.id windowIds then
+                f window
+
+            else
+                window
+    in
+    { model | windows = List.map updateWindow model.windows }
+
+
+fossilizeSelection : Model -> Model
+fossilizeSelection model =
+    let
+        clearField m =
+            { m | search = "" }
+
+        -- Fossilize the checked tabs from search
+        checkify m =
+            let
+                checkedFromSearch =
+                    List.map .id (getCheckedFromSearch m)
+            in
+            updateTabs checkedFromSearch (setChecked Checked) m
+    in
+    model |> clearField |> checkify
 
 
 toggleChecked : Tab -> Tab
 toggleChecked tab =
-    { tab | checked = not tab.checked }
-
-
-setMouseOverFavicon : Bool -> Tab -> Tab
-setMouseOverFavicon bool tab =
-    { tab | mouseOverFavicon = bool }
-
-
-setSpotlight : Bool -> Tab -> Tab
-setSpotlight bool tab =
-    { tab | spotlight = bool }
-
-
-setSelected : Bool -> Tab -> Tab
-setSelected bool tab =
     { tab
-        | selected = bool
-        , checked = False
+        | checked =
+            case tab.checked of
+                NotChecked ->
+                    Checked
+
+                Checked ->
+                    NotChecked
+
+                CheckedFromSearch ->
+                    NotChecked
     }
 
 
-setChecked : Bool -> Tab -> Tab
-setChecked bool tab =
-    { tab | checked = bool }
+setChecked : CheckStatus -> Tab -> Tab
+setChecked status tab =
+    { tab | checked = status }
+
+
+getEnabledWindows : Model -> List WindowId
+getEnabledWindows model =
+    model.windows
+        |> List.filter .enabled
+        |> List.map .id
 
 
 invertSelection : Model -> Model
 invertSelection model =
     let
-        checked =
-            getChecked model
-                |> List.map .id
-
         selected =
-            getSelected model
+            getSelection model
                 |> List.map .id
     in
-    if List.isEmpty checked then
-        -- if no subselection then we invert the selection
-        updateTabsField (getTabIds model) toggleSelected model
-
-    else
-        -- otherwise we invert the subselection
-        updateTabsField selected toggleChecked model
+    updateTabs selected toggleChecked model
 
 
 selectSimilar : Model -> Model
 selectSimilar model =
     let
-        regex =
-            case Regex.fromString "^.+?://([^/]+).*" of
-                Just r ->
-                    r
-
-                Nothing ->
-                    Regex.never
-
-        domainOf tab =
-            Regex.findAtMost 1 regex tab.url
-                |> List.map .submatches
-                |> List.concat
-
         checkedDomains =
-            getChecked model
+            model
+                |> getChecked
+                |> List.map .url
                 |> List.map domainOf
 
-        selectedDomains =
-            getSelected model
-                |> List.map domainOf
-
-        tabIds : List Tab -> List (List (Maybe String)) -> List Int
+        tabIds : List Tab -> List (Maybe String) -> List TabId
         tabIds tabs domains =
             tabs
-                |> List.filter (\tab -> List.member (domainOf tab) domains)
+                |> List.filter (\tab -> List.member (domainOf tab.url) domains)
                 |> List.map .id
     in
-    if List.isEmpty checkedDomains then
-        updateTabsField (tabIds (getTabs model) selectedDomains) (setSelected True) model
+    updateTabs (tabIds (getSelection model) checkedDomains) (setChecked Checked) model
 
-    else
-        updateTabsField (tabIds (getSelected model) checkedDomains) (setChecked True) model
+
+domainOf : String -> Maybe String
+domainOf url =
+    case
+        Regex.findAtMost 1 (regexify "^.+?://([^/]+).*") url
+            |> List.map .submatches
+            |> List.concat
+    of
+        domain :: _ ->
+            domain
+
+        [] ->
+            Nothing
+
+
+selectDuplicates : Model -> Model
+selectDuplicates model =
+    let
+        selected =
+            getSelection model
+
+        -- https://en.wikipedia.org/wiki/Cattle#Etymology is considered a duplicate of https://en.wikipedia.org/wiki/Cattle
+        truncate url =
+            url
+                |> Regex.replace (regexify "#.*$") (\_ -> "")
+
+        f : List String -> List Tab -> List TabId
+        f urls tabs =
+            case tabs of
+                tab :: etc ->
+                    if List.member (truncate tab.url) urls then
+                        tab.id :: f urls etc
+
+                    else
+                        f (truncate tab.url :: urls) etc
+
+                [] ->
+                    []
+    in
+    model
+        |> uncheckAll
+        |> updateTabs (f [] selected) (setChecked Checked)
+
+
+regexify : String -> Regex
+regexify s =
+    Maybe.withDefault Regex.never <| Regex.fromString s
+
+
+uncheckAll : Model -> Model
+uncheckAll model =
+    updateTabs (getTabIds model) (setChecked NotChecked) model
 
 
 subscriptions : Model -> Sub Msg
@@ -665,7 +751,11 @@ view model =
             [ Attributes.class "main" ]
             [ Html.div
                 [ Attributes.class "left" ]
-                [ viewBrowser model ]
+                [ viewBrowserHeader model
+                , Html.div
+                    [ Attributes.class "browser_container" ]
+                    [ viewBrowser model ]
+                ]
             , Html.div
                 [ Attributes.class "right" ]
                 [ viewToolbar model
@@ -678,6 +768,43 @@ view model =
         ]
 
 
+viewBrowserHeader : Model -> Html Msg
+viewBrowserHeader model =
+    let
+        nEnabledWindows =
+            List.length (getEnabledWindows model)
+
+        nWindows =
+            List.length model.windows
+    in
+    Html.div
+        [ Attributes.class "browserHeader" ]
+        [ Html.div
+            [ Attributes.class "browserHeader_caption" ]
+            [ Html.text (String.fromInt nEnabledWindows ++ " / " ++ String.fromInt nWindows) ]
+        , Html.div
+            ([ Attributes.classList
+                [ ( "toggleAllWindows", True )
+                , ( "allEnabled", nEnabledWindows == nWindows )
+                , ( "someEnabled", nEnabledWindows /= 0 && (nEnabledWindows /= nWindows) )
+                ]
+             , Events.onClick ToggleWindows
+             ]
+                ++ displayMessage (messageToggleWindows (nEnabledWindows /= nWindows))
+            )
+            []
+        ]
+
+
+messageToggleWindows : Bool -> Kind
+messageToggleWindows enable =
+    if enable then
+        Hint "Enable all windows"
+
+    else
+        Hint "Disable all windows"
+
+
 viewBrowser : Model -> Html Msg
 viewBrowser model =
     let
@@ -685,7 +812,7 @@ viewBrowser model =
             Html.div
                 [ Attributes.class "createWindow_container" ]
                 [ Html.div
-                    ([ Attributes.class "createWindow"
+                    ([ Attributes.class "createTab"
                      , Events.onClick CreateWindow
                      , Events.on "drop" (Decode.succeed (Execute Extract))
                      ]
@@ -706,25 +833,27 @@ viewBrowser model =
 viewWindow : Window -> Html Msg
 viewWindow window =
     let
-        selectTabs =
+        color =
+            if window.enabled then
+                window.color
+
+            else
+                "white"
+
+        toggleWindowSideBar =
             Html.div
-                ([ Attributes.class "selectTabs"
-                 , Attributes.style "background-color" window.color
-                 , onEventThenStop "click" (SelectTabs window.id)
+                ([ Attributes.class "toggleWindow"
+                 , Attributes.style "background-color" color
+                 , onEventThenStop "click" (ToggleWindow window)
                  ]
-                    ++ displayMessage (Hint "Select tabs from this window")
+                    ++ displayMessage (messageToggleWindow window.enabled)
                 )
                 []
-
-        footer =
-            Html.div
-                [ Attributes.class "window_footer" ]
-                [ selectTabs ]
 
         createTab =
             Html.div
                 ([ Attributes.class "createTab"
-                 , onEventThenStop "click" (CreateTab window.id)
+                 , onEventThenStop "click" (CreateTab window)
                  , Events.on "drop" (Decode.succeed (Drop window.id -1))
                  ]
                     ++ displayMessage (Hint "Open a new tab")
@@ -750,9 +879,17 @@ viewWindow window =
                 [ ( "window", True )
                 , ( "incognito", window.incognito )
                 ]
-            , Events.onDoubleClick (FocusWindow window.id)
             ]
-            [ container, footer ]
+            [ container, toggleWindowSideBar ]
+
+
+messageToggleWindow : Bool -> Kind
+messageToggleWindow enabled =
+    if enabled then
+        Hint "Disable this window"
+
+    else
+        Hint "Enable this window"
 
 
 viewTab : Tab -> Html Msg
@@ -760,17 +897,15 @@ viewTab tab =
     Html.div
         ([ Attributes.classList
             [ ( "tab", True )
-            , ( "selected", tab.selected )
             , ( "pinned", tab.pinned )
-            , ( "checked", tab.checked )
-            , ( "spotlight", tab.spotlight )
+            , ( "checked", isChecked tab )
+            , ( "active", tab.active )
             ]
-         , Attributes.title tab.title
          , Attributes.style
             "background-image"
             ("url(" ++ tab.faviconUrl ++ ")")
-         , onEventThenStop "click" (TabClick tab.id)
-         , onEventThenStop "dblclick" (FocusTab tab.id)
+         , onEventThenStop "click" (TabClick tab)
+         , onEventThenStop "dblclick" (FocusTab tab)
          , Events.on "drop" (Decode.succeed (Drop tab.windowId tab.index))
          ]
             ++ displayMessage (Title tab.title)
@@ -802,6 +937,7 @@ viewToolbar model =
         , Html.div
             [ Attributes.class "row2" ]
             [ viewEditSelection
+            , viewGroupChecked model
             , viewSortSelection model
             ]
         , Html.div
@@ -822,7 +958,7 @@ viewInput model =
         [ Html.input
             [ Attributes.class "search"
             , Attributes.value model.search
-            , Events.onInput Search
+            , Events.onInput SearchInput
             , Attributes.autofocus True
             , Attributes.placeholder "Search"
             ]
@@ -832,7 +968,7 @@ viewInput model =
                 [ ( "clearSearch", model.search /= "" ) ]
              , Events.onClick ClearSearch
              ]
-                ++ displayMessage (Hint "Clear")
+                ++ displayMessage (Hint "Clear the search field")
             )
             []
         ]
@@ -842,49 +978,43 @@ viewEditSelection : Html Msg
 viewEditSelection =
     let
         edits =
-            [ All, Empty, Not, Similar, Uncheck ]
+            [ Not, Similar, Duplicates, Uncheck ]
     in
     Html.div
         [ Attributes.class "editSelection" ]
-        (List.map viewEditSelectionHelp edits)
+        (List.map viewEditHelp edits)
 
 
-viewEditSelectionHelp : Edit -> Html Msg
-viewEditSelectionHelp edit =
+viewEditHelp : Edit -> Html Msg
+viewEditHelp edit =
     let
         str =
             case edit of
-                All ->
-                    "all"
-
-                Empty ->
-                    "empty"
-
                 Not ->
                     "not"
 
                 Similar ->
                     "similar"
 
+                Duplicates ->
+                    "duplicates"
+
                 Uncheck ->
                     "uncheck"
 
         message =
             case edit of
-                All ->
-                    "Select all tabs"
-
-                Empty ->
-                    "Select none"
-
                 Not ->
                     "Invert selection"
 
                 Similar ->
                     "Add similar tabs to the selection"
 
+                Duplicates ->
+                    "Select duplicates"
+
                 Uncheck ->
-                    "Uncheck all tabs"
+                    "Unselect all tabs"
     in
     Html.div
         ([ Attributes.classList
@@ -898,15 +1028,41 @@ viewEditSelectionHelp edit =
         []
 
 
+viewGroupChecked : Model -> Html Msg
+viewGroupChecked model =
+    Html.div
+        ([ Attributes.classList
+            [ ( "groupChecked", True )
+            , ( "enabled", model.groupChecked )
+            ]
+         , Events.onClick GroupCheckedClick
+         ]
+            ++ displayMessage (messageGroupChecked model.groupChecked)
+        )
+        []
+
+
+messageGroupChecked : Bool -> Kind
+messageGroupChecked grouped =
+    if grouped then
+        Hint "Unstick selected tabs from the top of the list"
+
+    else
+        Hint "Stick selected tabs to the top of the list"
+
+
 viewSortSelection : Model -> Html Msg
 viewSortSelection model =
     let
         sorts =
-            [ Visited, Checked, Websites, Windows ]
+            [ Visited, Websites, Windows ]
     in
     Html.div
         [ Attributes.class "sortSelection" ]
-        (List.map (viewSortSelectionHelp model) sorts)
+        (List.map
+            (viewSortSelectionHelp model)
+            sorts
+        )
 
 
 viewSortSelectionHelp : Model -> Sort -> Html Msg
@@ -917,9 +1073,6 @@ viewSortSelectionHelp model sort =
                 Visited ->
                     "visited"
 
-                Checked ->
-                    "checked"
-
                 Websites ->
                     "websites"
 
@@ -929,10 +1082,7 @@ viewSortSelectionHelp model sort =
         message =
             case sort of
                 Visited ->
-                    "Sort the selection by last visited"
-
-                Checked ->
-                    "Put the checked tabs at the top of the selection"
+                    "Sort tabs by last visited"
 
                 Websites ->
                     "Group tabs by website"
@@ -956,85 +1106,34 @@ viewSortSelectionHelp model sort =
 viewPreview : Model -> Html Msg
 viewPreview model =
     let
+        selected =
+            getSelection model
+
         checked =
             getChecked model
-
-        selected =
-            getSelected model
-
-        tab =
-            Html.div
-                [ Attributes.classList
-                    [ ( "preview_tab", True )
-                    , ( "selected", True )
-                    ]
-                , Attributes.style
-                    "background-image"
-                    "url(img/default_favicon.png)"
-                ]
-                []
-
-        content =
-            if List.isEmpty selected then
-                [ Html.text "" ]
-
-            else if List.isEmpty checked then
-                [ Html.div
-                    ([ Attributes.class "preview_xtabs"
-                     , Attributes.draggable "true"
-                     ]
-                        ++ displayMessage (Hint "You can drag these tabs to a new position")
-                    )
-                    [ Html.text (String.fromInt (List.length selected) ++ " x")
-                    , tab
-                    ]
-                ]
-
-            else
-                checked
-                    |> List.map viewPreviewHelp
-
-        noBraces =
-            not model.mouseOverFavicons
-
-        events =
-            if not <| List.isEmpty checked then
-                [ Events.onMouseEnter (MouseOverFavicons True)
-                , Events.onMouseLeave (MouseOverFavicons False)
-                , Events.onClick FaviconsClick
-                ]
-
-            else
-                []
     in
-    Html.div
-        [ Attributes.class "preview" ]
-        [ Html.div
-            [ Attributes.classList
-                [ ( "preview_brace", True )
-                , ( "opening", True )
-                , ( "hidden", noBraces )
-                ]
+    if List.isEmpty checked then
+        if List.isEmpty selected then
+            Html.div
+                [ Attributes.class "noPreview" ]
+                [ Html.text "No window enabled" ]
+
+        else
+            Html.div
+                [ Attributes.class "noPreview" ]
+                [ Html.text "No tab selected" ]
+
+    else
+        Html.div
+            [ Attributes.class "preview" ]
+            [ Html.div
+                ([ Attributes.class "preview_content"
+                 , Attributes.draggable "true"
+                 ]
+                    ++ displayMessage (Hint "You can drag these tabs to a new position")
+                )
+                (checked |> List.map viewPreviewHelp)
             ]
-            []
-        , Html.div
-            (Attributes.classList
-                [ ( "preview_content", True )
-                , ( "text", List.isEmpty checked )
-                , ( "none", List.isEmpty selected )
-                ]
-                :: events
-            )
-            content
-        , Html.div
-            [ Attributes.classList
-                [ ( "preview_brace", True )
-                , ( "closing", True )
-                , ( "hidden", noBraces )
-                ]
-            ]
-            []
-        ]
 
 
 viewPreviewHelp : Tab -> Html Msg
@@ -1052,7 +1151,7 @@ viewExecuteAction : Html Msg
 viewExecuteAction =
     let
         actions =
-            [ Extract, Delete, Sort, Pin, RemoveDuplicates ]
+            [ Extract, Delete, Sort, Pin ]
     in
     Html.div
         [ Attributes.class "executeAction" ]
@@ -1076,9 +1175,6 @@ viewExecuteActionHelp action =
                 Pin ->
                     "pin"
 
-                RemoveDuplicates ->
-                    "remove_duplicates"
-
         message =
             case action of
                 Extract ->
@@ -1088,13 +1184,10 @@ viewExecuteActionHelp action =
                     "Remove tabs"
 
                 Sort ->
-                    "Sort tabs by url and title"
+                    "Sort tabs by website"
 
                 Pin ->
-                    "Pin/Unpin tabs"
-
-                RemoveDuplicates ->
-                    "Remove duplicates"
+                    "Pin/unpin tabs"
     in
     Html.div
         ([ Attributes.classList
@@ -1135,42 +1228,22 @@ viewItem model tab =
                 Nothing ->
                     "Blue"
 
-        opening =
-            Html.div
-                [ Attributes.classList
-                    [ ( "item_brace", True )
-                    , ( "opening", True )
-                    , ( "hidden", not tab.mouseOverFavicon )
-                    ]
-                ]
-                []
-
-        closing =
-            Html.div
-                [ Attributes.classList
-                    [ ( "item_brace", True )
-                    , ( "closing", True )
-                    , ( "hidden", not tab.mouseOverFavicon )
-                    ]
-                ]
-                []
-
         favicon =
             Html.div
                 [ Attributes.class "item_favicon"
                 , Attributes.style
                     "background-image"
                     ("url(" ++ tab.faviconUrl ++ ")")
-                , Events.onClick (FaviconClick tab.id)
-                , Events.onMouseEnter (MouseOverFavicon tab.id True)
-                , Events.onMouseLeave (MouseOverFavicon tab.id False)
                 ]
                 []
 
         title =
             Html.div
-                [ Attributes.class "item_title"
-                , Events.onClick (FocusTab tab.id)
+                [ Attributes.classList
+                    [ ( "item_title", True )
+                    , ( "checkedFromSearch", tab.checked == CheckedFromSearch )
+                    ]
+                , Events.onClick (FocusTab tab)
                 ]
                 [ Html.text tab.title ]
 
@@ -1178,33 +1251,25 @@ viewItem model tab =
             Html.div
                 [ Attributes.class "item_checkbox"
                 , Attributes.style "background-color" windowColor
-                , Events.onClick (CheckboxClick tab.id)
+                , Events.onClick (CheckboxClick tab)
                 ]
                 [ Html.div
                     [ Attributes.classList
                         [ ( "item_check", True )
-                        , ( "checked", tab.checked )
+                        , ( "checked", isChecked tab )
                         ]
                     ]
                     []
                 ]
-
-        remove =
-            Html.div
-                [ Attributes.class "item_remove"
-                , Events.onClick (RemoveClick tab.id)
-                ]
-                []
     in
     Html.div
-        [ Attributes.classList
+        (Attributes.classList
             [ ( "item", True )
-            , ( "checked", tab.checked )
+            , ( "checked", isChecked tab )
             ]
-        , Events.onMouseEnter (MouseEnterItem tab.id tab.url)
-        , Events.onMouseLeave (MouseLeaveItem tab.id)
-        ]
-        [ opening, favicon, closing, title, checkbox, remove ]
+            :: displayMessage (Url tab.url)
+        )
+        [ favicon, title, checkbox ]
 
 
 viewFooter : Model -> Html Msg
@@ -1233,54 +1298,66 @@ displayMessage message =
     [ Events.onMouseEnter (SetMessage message), Events.onMouseLeave (SetMessage (Hint "")) ]
 
 
+isChecked : Tab -> Bool
+isChecked tab =
+    tab.checked == Checked || tab.checked == CheckedFromSearch
+
+
 getSelection : Model -> List Tab
 getSelection model =
     let
         tabs =
-            getSelected model
+            model.windows
+                |> List.filter .enabled
+                |> List.map .tabs
+                |> List.concat
+
+        augmentedSortByFor tab sortBy =
+            if model.groupChecked && tab.checked == CheckedFromSearch then
+                ( 1, sortBy )
+
+            else if model.groupChecked && tab.checked == Checked then
+                ( 2, sortBy )
+
+            else
+                ( 3, sortBy )
     in
     case model.sortBy of
         Visited ->
-            List.sortBy (\tab -> getIndexOf model tab.id) tabs
-
-        Checked ->
             List.sortBy
-                (\tab ->
-                    if tab.checked then
-                        1
-
-                    else
-                        2
-                )
+                (\tab -> augmentedSortByFor tab (getIndexOf tab.id model.visited))
                 tabs
 
         Websites ->
-            List.sortBy .url tabs
+            List.sortBy
+                (\tab -> augmentedSortByFor tab tab.url)
+                tabs
 
         Windows ->
-            List.sortBy
-                (\tab ->
-                    case getIndexOfWindow model tab.windowId of
+            let
+                indexInBrowser tab =
+                    case getIndexOfWindow tab.windowId model of
                         Just i ->
                             ( i, tab.index )
 
                         Nothing ->
                             ( List.length model.windows, tab.index )
-                )
+            in
+            List.sortBy
+                (\tab -> augmentedSortByFor tab (indexInBrowser tab))
                 tabs
 
 
-getIndexOfWindow : Model -> Int -> Maybe Int
-getIndexOfWindow model windowId =
+getIndexOfWindow : WindowId -> Model -> Maybe Int
+getIndexOfWindow windowId model =
     model.windows
         |> List.filter (\window -> window.id == windowId)
         |> List.map .index
         |> List.head
 
 
-getIndexOf : Model -> Int -> Int
-getIndexOf model tabId =
-    -- finds the index of a tab in the visited list
+getIndexOf : TabId -> List TabId -> Int
+getIndexOf tabId tabIds =
     let
         helper : List Int -> Int -> Int -> Int
         helper lst elem offset =
@@ -1288,7 +1365,6 @@ getIndexOf model tabId =
                 [] ->
                     offset + 1
 
-                -- tabs which aren't present in the visited list are appended to the end
                 x :: xs ->
                     if x == elem then
                         offset
@@ -1296,58 +1372,24 @@ getIndexOf model tabId =
                     else
                         helper xs elem (offset + 1)
     in
-    helper model.visited tabId 0
-
-
-getSelected : Model -> List Tab
-getSelected model =
-    model.windows
-        |> List.map .tabs
-        |> List.concat
-        |> List.filter .selected
+    helper tabIds tabId 0
 
 
 getChecked : Model -> List Tab
 getChecked model =
-    model.windows
-        |> List.map .tabs
-        |> List.concat
-        |> List.filter .checked
+    getSelection model
+        |> List.filter (\tab -> isChecked tab)
 
 
-getPertinentSelection : Model -> List Int
-getPertinentSelection model =
-    -- return the checked tabIds, or if no checked tabs, the whole selection
-    let
-        checked =
-            getChecked model
-    in
-    if List.isEmpty checked then
-        List.map .id (getSelected model)
-
-    else
-        List.map .id checked
+getCheckedFromSearch : Model -> List Tab
+getCheckedFromSearch model =
+    getChecked model
+        |> List.filter (\tab -> tab.checked == CheckedFromSearch)
 
 
-getTabs : Model -> List Tab
-getTabs model =
-    model.windows
-        |> List.map .tabs
-        |> List.concat
-
-
-getTabIds : Model -> List Int
+getTabIds : Model -> List TabId
 getTabIds model =
     model.windows
-        |> List.map .tabs
-        |> List.concat
-        |> List.map .id
-
-
-getTabIdsOfWindow : Model -> Int -> List Int
-getTabIdsOfWindow model windowId =
-    model.windows
-        |> List.filter (\window -> window.id == windowId)
         |> List.map .tabs
         |> List.concat
         |> List.map .id
@@ -1364,19 +1406,19 @@ windowsDecoder =
 
 windowDecoder : Decode.Decoder WindowInfos
 windowDecoder =
-    Decode.map4 WindowInfos
+    Decode.map3 WindowInfos
         (Decode.field "id" Decode.int)
         (Decode.field "incognito" Decode.bool)
-        (Decode.field "focused" Decode.bool)
         (Decode.field "tabs" (Decode.list tabDecoder))
 
 
 tabDecoder : Decode.Decoder TabInfos
 tabDecoder =
-    Decode.map6 TabInfos
+    Decode.map7 TabInfos
         (Decode.field "id" Decode.int)
         (Decode.field "url" Decode.string)
         (Decode.maybe (Decode.field "favIconUrl" Decode.string))
         (Decode.field "title" Decode.string)
         (Decode.field "pinned" Decode.bool)
         (Decode.field "windowId" Decode.int)
+        (Decode.field "active" Decode.bool)
