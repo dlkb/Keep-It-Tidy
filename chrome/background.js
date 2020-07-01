@@ -6,11 +6,11 @@ function pushTo(arr, item) {
   if (arr.length > MAX_LENGTH) {
     arr.pop();
   }
-};
+}
 
-browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   function getWindowsJson(callback) {
-    browser.windows.getAll({ "populate": true, "windowTypes": ["normal"] }, function (windows) {
+    chrome.windows.getAll({ "populate": true, "windowTypes": ["normal"] }, function (windows) {
       callback(JSON.stringify(windows));
     });
   }
@@ -26,11 +26,11 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       });
       return true;
     case "createTab":
-      browser.tabs.create({ "windowId": message.windowId });
-      browser.windows.update(message.windowId, { "focused": true });
+      chrome.tabs.create({ "windowId": message.windowId });
+      chrome.windows.update(message.windowId, { "focused": true });
       return;
     case "createWindow":
-      browser.windows.create();
+      chrome.windows.create();
       return;
     case "removeTabs":
       // it's a workaround because there is a bug in chrome, the callback from tabs.remove executes before every tab has been closed
@@ -39,16 +39,16 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       function onTabRemoved() {
         count++;
         if (count == tabIds.length) {
-          browser.tabs.onRemoved.removeListener(onTabRemoved);
+          chrome.tabs.onRemoved.removeListener(onTabRemoved);
           sendTree();
           return;
         }
       }
-      browser.tabs.onRemoved.addListener(onTabRemoved);
-      browser.tabs.remove(tabIds, function () {
-        if (browser.runtime.lastError) {
-          console.warn("Whoops... " + browser.runtime.lastError.message);
-          browser.tabs.onRemoved.removeListener(onTabRemoved);
+      chrome.tabs.onRemoved.addListener(onTabRemoved);
+      chrome.tabs.remove(tabIds, function () {
+        if (chrome.runtime.lastError) {
+          console.warn("Whoops... " + chrome.runtime.lastError.message);
+          chrome.tabs.onRemoved.removeListener(onTabRemoved);
           sendTree();
           return;
         }
@@ -57,14 +57,14 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     case "extractTabs":
       var tabIds = message.tabIds;
       var firstTabId = tabIds.shift();
-      browser.windows.create({ "focused": false, "tabId": firstTabId }, function (win) {
+      chrome.windows.create({ "focused": false, "tabId": firstTabId }, function (win) {
         if (tabIds.length == 0) {
           sendTree();
           return;
         }
-        browser.tabs.move(tabIds, { "windowId": win.id, "index": 1 }, function () {
-          if (browser.runtime.lastError) {
-            console.warn("Whoops... " + browser.runtime.lastError.message);
+        chrome.tabs.move(tabIds, { "windowId": win.id, "index": 1 }, function () {
+          if (chrome.runtime.lastError) {
+            console.warn("Whoops... " + chrome.runtime.lastError.message);
           }
           sendTree();
           return;
@@ -75,11 +75,11 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       var tabIds = message.tabIds;
       var count = 0;
       for (let tabId of tabIds) {
-        browser.tabs.get(tabId, function (tab) {
-          browser.tabs.update(tabId, { "pinned": !tab.pinned }, function () {
+        chrome.tabs.get(tabId, function (tab) {
+          chrome.tabs.update(tabId, { "pinned": !tab.pinned }, function () {
             count++;
-            if (browser.runtime.lastError) {
-              console.warn("Whoops... " + browser.runtime.lastError.message);
+            if (chrome.runtime.lastError) {
+              console.warn("Whoops... " + chrome.runtime.lastError.message);
               sendTree();
               return;
             }
@@ -96,7 +96,7 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       var urls = {}; // tabId1 : url, ...
       var count = 0;
       for (let tabId of tabIds) {
-        browser.tabs.get(tabId, function (tab) {
+        chrome.tabs.get(tabId, function (tab) {
           count++;
           urls[tabId] = tab.url;
           if (count == tabIds.length) {
@@ -109,7 +109,7 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
               }
             });
             // defaults to the window the tab is currently in
-            browser.tabs.move(tabIds, { "index": -1 }, function () {
+            chrome.tabs.move(tabIds, { "index": -1 }, function () {
               sendTree();
               return;
             });
@@ -118,8 +118,8 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       }
       return true;
     case "focusTab":
-      browser.tabs.update(message.tabId, { "active": true });
-      browser.windows.update(message.windowId, { "focused": true });
+      chrome.tabs.update(message.tabId, { "active": true });
+      chrome.windows.update(message.windowId, { "focused": true });
       return;
     case "moveTabs":
       var tabIds = message.tabIds;
@@ -129,10 +129,10 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         tabIds.reverse(); // trick
       }
       for (let tabId of tabIds) { // inserting a group of tabs at once doesn't work in this case, tabs end up not together, not sure why
-        browser.tabs.move(tabId, { "index": index, "windowId": message.windowId }, function () {
+        chrome.tabs.move(tabId, { "index": index, "windowId": message.windowId }, function () {
           count++;
-          if (browser.runtime.lastError) {
-            console.warn("Whoops... " + browser.runtime.lastError.message);
+          if (chrome.runtime.lastError) {
+            console.warn("Whoops... " + chrome.runtime.lastError.message);
             sendTree();
             return;
           }
@@ -144,20 +144,20 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       }
       return true;
     case "openUrl":
-      browser.tabs.create({ "url": message.url });
+      chrome.tabs.create({ "url": message.url });
       return;
   }
 });
 
-browser.tabs.onActivated.addListener(function (activeInfo) {
+chrome.tabs.onActivated.addListener(function (activeInfo) {
   pushTo(visited, activeInfo.tabId);
 });
 
-browser.windows.onFocusChanged.addListener(function (windowId) {
-  if (windowId === browser.windows.WINDOW_ID_NONE) {
+chrome.windows.onFocusChanged.addListener(function (windowId) {
+  if (windowId === chrome.windows.WINDOW_ID_NONE) {
     return;
   }
-  browser.tabs.query({ "active": true, "currentWindow": true, "windowType": "normal" }, function (tabs) {
+  chrome.tabs.query({ "active": true, "currentWindow": true, "windowType": "normal" }, function (tabs) {
     if (tabs.length > 0) {
       pushTo(visited, tabs[0].id);
     }
@@ -167,7 +167,7 @@ browser.windows.onFocusChanged.addListener(function (windowId) {
 var UPDATE_FROM_224 = "New name, new logo, simpler design, bug fixes. See the store for more info.";
 var UPDATE_FROM_224_CONTEXT = "Top Tomato => Keep It Tidy"
 
-browser.runtime.onInstalled.addListener(function (details) {
+chrome.runtime.onInstalled.addListener(function (details) {
   if (details.reason == "install") { // if first installation
     // Set default values for options
   } else if (details.reason == "update") { // if update of the extension
@@ -180,7 +180,7 @@ browser.runtime.onInstalled.addListener(function (details) {
         contextMessage: UPDATE_FROM_224_CONTEXT,
         iconUrl: "img/logo-128.png"
       }
-      browser.notifications.create("update", options);
+      chrome.notifications.create("update", options);
     }
   }
 });

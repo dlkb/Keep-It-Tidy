@@ -22,9 +22,8 @@ function onLoad() {
     });
 
     app.ports.extractTabs.subscribe(function (tabIds) {
-      browser.runtime.sendMessage({ "task": "extractTabs", "tabIds": tabIds }, function (response) {
-        app.ports.updatedTree.send(response.windows);
-      });
+      browser.runtime.sendMessage({ "task": "extractTabs", "tabIds": tabIds });
+      window.close();
     });
 
     app.ports.sortTabs.subscribe(function (tabIds) {
