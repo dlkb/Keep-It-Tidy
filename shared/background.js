@@ -41,6 +41,7 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         if (count == tabIds.length) {
           browser.tabs.onRemoved.removeListener(onTabRemoved);
           sendTree();
+          return;
         }
       }
       browser.tabs.onRemoved.addListener(onTabRemoved);
@@ -49,34 +50,24 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
           console.warn("Whoops... " + browser.runtime.lastError.message);
           browser.tabs.onRemoved.removeListener(onTabRemoved);
           sendTree();
+          return;
         }
       });
       return true;
     case "extractTabs":
       var tabIds = message.tabIds;
-      var isTabPinned = {};
-      for (let tabId of tabIds) {
-        browser.tabs.get(tabId, function (tab) {
-          isTabPinned[tabId] = tab.pinned;
-        });
-      }
       var firstTabId = tabIds.shift();
       browser.windows.create({ "focused": false, "tabId": firstTabId }, function (win) {
-        browser.tabs.update(firstTabId, { "pinned": isTabPinned[firstTabId] });
+        if (tabIds.length == 0) {
+          sendTree();
+          return;
+        }
         browser.tabs.move(tabIds, { "windowId": win.id, "index": 1 }, function () {
-          var count = 0;
-          for (let tabId of tabIds) {
-            browser.tabs.update(tabId, { "pinned": isTabPinned[tabId] }, function () {
-              count++;
-              if (browser.runtime.lastError) {
-                console.warn("Whoops... " + browser.runtime.lastError.message);
-                sendTree();
-              }
-              if (count == tabIds.length) {
-                sendTree();
-              }
-            });
+          if (browser.runtime.lastError) {
+            console.warn("Whoops... " + browser.runtime.lastError.message);
           }
+          sendTree();
+          return;
         });
       });
       return true;
@@ -90,9 +81,11 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             if (browser.runtime.lastError) {
               console.warn("Whoops... " + browser.runtime.lastError.message);
               sendTree();
+              return;
             }
             if (count == tabIds.length) {
               sendTree();
+              return;
             }
           });
         });
@@ -118,6 +111,7 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             // defaults to the window the tab is currently in
             browser.tabs.move(tabIds, { "index": -1 }, function () {
               sendTree();
+              return;
             });
           }
         });
@@ -134,16 +128,17 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       if (message.index == -1) {
         tabIds.reverse(); // trick
       }
-      for (let i = tabIds.length - 1; tabId = tabIds[i]; i--) { // inserting a group of tabs at once doesn't work in this case, tabs end up not together, not sure why
+      for (let tabId of tabIds) { // inserting a group of tabs at once doesn't work in this case, tabs end up not together, not sure why
         browser.tabs.move(tabId, { "index": index, "windowId": message.windowId }, function () {
+          count++;
           if (browser.runtime.lastError) {
             console.warn("Whoops... " + browser.runtime.lastError.message);
             sendTree();
-          } else {
-            count++;
-            if (count == tabIds.length) {
-              sendTree();
-            }
+            return;
+          }
+          if (count == tabIds.length) {
+            sendTree();
+            return;
           }
         });
       }
