@@ -483,9 +483,6 @@ onUpdatedTree toBeDecoded model =
         checked =
             List.map .id (getChecked model)
 
-        checkedFromSearch =
-            List.map .id (getCheckedFromSearch model)
-
         decoded =
             Decode.decodeString windowsDecoder toBeDecoded
 
@@ -500,29 +497,35 @@ onUpdatedTree toBeDecoded model =
         updateTree m =
             { m | windows = List.indexedMap buildWindow windowsInfos }
 
+        atLeastOneTabChecked tabs =
+            case tabs of
+                tab :: etc ->
+                    isChecked tab || atLeastOneTabChecked etc
+
+                [] ->
+                    False
+
         restoreState m =
             let
                 restoreWindow window =
-                    if List.member window.id enabledWindows then
+                    if List.member window.id enabledWindows || atLeastOneTabChecked window.tabs then
                         { window | enabled = True }
 
                     else
                         { window | enabled = False }
 
                 restoreTab tab =
-                    if List.member tab.id checkedFromSearch && List.member tab.windowId enabledWindows then
-                        { tab | checked = CheckedFromSearch }
-
-                    else if List.member tab.id checked && List.member tab.windowId enabledWindows then
+                    if List.member tab.id checked then
                         { tab | checked = Checked }
 
                     else
                         { tab | checked = NotChecked }
             in
-            updateWindows (List.map .id m.windows) restoreWindow m
+            m
                 |> updateTabs (getTabIds m) restoreTab
+                |> updateWindows (List.map .id m.windows) restoreWindow
     in
-    model |> updateTree |> restoreState
+    model |> fossilizeSelection |> updateTree |> restoreState
 
 
 updateTabs : List TabId -> (Tab -> Tab) -> Model -> Model

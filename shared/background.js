@@ -1,6 +1,5 @@
 const MAX_LENGTH = 1024; // max length of the array keeping track of the browsing history
 var visited = []; // tabIds of the last visited tabs, [last, next-to-last, ...]
-var timeout;
 
 function pushTo(arr, item) {
   arr.unshift(item);
@@ -62,15 +61,25 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         });
       }
       var firstTabId = tabIds.shift();
-      browser.windows.create({ "tabId": firstTabId }, function (win) {
+      browser.windows.create({ "focused": false, "tabId": firstTabId }, function (win) {
         browser.tabs.update(firstTabId, { "pinned": isTabPinned[firstTabId] });
         browser.tabs.move(tabIds, { "windowId": win.id, "index": 1 }, function () {
+          var count = 0;
           for (let tabId of tabIds) {
-            browser.tabs.update(tabId, { "pinned": isTabPinned[tabId] });
+            browser.tabs.update(tabId, { "pinned": isTabPinned[tabId] }, function () {
+              count++;
+              if (browser.runtime.lastError) {
+                console.warn("Whoops... " + browser.runtime.lastError.message);
+                sendTree();
+              }
+              if (count == tabIds.length) {
+                sendTree();
+              }
+            });
           }
         });
       });
-      return;
+      return true;
     case "pinTabs":
       var tabIds = message.tabIds;
       var count = 0;
@@ -81,7 +90,6 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             if (browser.runtime.lastError) {
               console.warn("Whoops... " + browser.runtime.lastError.message);
               sendTree();
-              return true;
             }
             if (count == tabIds.length) {
               sendTree();
@@ -131,7 +139,6 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
           if (browser.runtime.lastError) {
             console.warn("Whoops... " + browser.runtime.lastError.message);
             sendTree();
-            return true;
           } else {
             count++;
             if (count == tabIds.length) {
