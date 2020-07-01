@@ -1,9 +1,9 @@
 # Keep It Tidy - Tab Manager
 Chrome/Firefox Extension
 
-[Chrome Web Store](https://chrome.google.com/webstore/detail/top-tomato/ncjlgbnopdeldjbdbcpgdepfifhpocip)
+[Chrome Web Store](https://chrome.google.com/webstore/detail/keep-it-tidy-tab-manager/ncjlgbnopdeldjbdbcpgdepfifhpocip)
 
-[Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/top-tomato/)
+[Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/kit/)
 
 Previously known as Top Tomato
 
@@ -17,7 +17,7 @@ You can close, sort by website, pin/unpin the selected tabs.
 You can extract the selection to a new window.
 You can move the selection by dragging it to a new position in the left panel. The selected tabs will be inserted before the tab you dropped the selection on.
 
-You can doubleclick a tab in the left panel to focus this tab.
+You can doubleclick a tab in the left panel or click a tab in the right panel to focus this tab.
 
 You can invert the selection, add similar (same website) tabs to the selection or select duplicates.
 
@@ -28,6 +28,8 @@ Select duplicates does not select the first tab of each family of duplicates ('f
 Matches from search are added to the selection unless you empty the search field.
 
 Selecting a tab from a disabled window will automatically enable this window.
+
+KIT doesn't collect any data.
 
 ### Chrome
 
