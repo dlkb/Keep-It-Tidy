@@ -33,25 +33,13 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       browser.windows.create();
       return;
     case "removeTabs":
-      // it's a workaround because there is a bug in chrome, the callback from tabs.remove executes before every tab has been closed
       var tabIds = message.tabIds;
-      var count = 0;
-      function onTabRemoved() {
-        count++;
-        if (count == tabIds.length) {
-          browser.tabs.onRemoved.removeListener(onTabRemoved);
-          sendTree();
-          return;
-        }
-      }
-      browser.tabs.onRemoved.addListener(onTabRemoved);
       browser.tabs.remove(tabIds, function () {
         if (browser.runtime.lastError) {
           console.warn("Whoops... " + browser.runtime.lastError.message);
-          browser.tabs.onRemoved.removeListener(onTabRemoved);
-          sendTree();
-          return;
         }
+        sendTree();
+        return;
       });
       return true;
     case "extractTabs":
