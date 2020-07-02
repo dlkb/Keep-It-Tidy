@@ -489,10 +489,14 @@ onUpdatedTree toBeDecoded model =
         windowsInfos =
             case decoded of
                 Ok value ->
-                    value
+                    removeEmptyWindows value
 
                 Err _ ->
                     []
+
+        removeEmptyWindows : List WindowInfos -> List WindowInfos
+        removeEmptyWindows list =
+            List.filter (\windowInfos -> List.length windowInfos.tabsInfos > 0) list
 
         updateTree m =
             { m | windows = List.indexedMap buildWindow windowsInfos }
