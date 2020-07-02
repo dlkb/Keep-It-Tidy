@@ -8,13 +8,17 @@ Chrome/Firefox Extension
 Previously known as Top Tomato
 
 You can search the tabs by entering keywords into the field.
+
 Example: power rangers, superman, batman = (power AND rangers) OR superman OR batman
+
 Press Enter when there is no match to search for these keywords on Google.
 
 If only one tab is selected, pressing Enter will focus this tab.
 
 You can close, sort by website, pin/unpin the selected tabs.
+
 You can extract the selection to a new window.
+
 You can move the selection by dragging it to a new position in the left panel. The selected tabs will be inserted before the tab you dropped the selection on.
 
 You can doubleclick a tab in the left panel or click a tab in the right panel to focus this tab.
