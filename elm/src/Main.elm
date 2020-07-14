@@ -370,35 +370,50 @@ update msg model =
 
         Execute action ->
             let
-                selection =
+                checked =
                     List.map .id (getChecked model)
+
+                selected =
+                    List.map .id (getSelection model)
+
+                cmd =
+                    case action of
+                        Extract ->
+                            if List.isEmpty checked then
+                                Cmd.none
+
+                            else
+                                Ports.extractTabs checked
+
+                        Delete ->
+                            if List.isEmpty checked then
+                                Cmd.none
+
+                            else
+                                Ports.removeTabs checked
+
+                        Pin ->
+                            if List.isEmpty checked then
+                                Cmd.none
+
+                            else
+                                Ports.pinTabs checked
+
+                        Sort ->
+                            if List.isEmpty checked then
+                                if List.isEmpty selected then
+                                    Cmd.none
+
+                                else
+                                    -- if there are no checked tabs then we default to tabs from enabled windows
+                                    Ports.sortTabs selected
+
+                            else
+                                Ports.sortTabs checked
             in
-            if List.isEmpty selection then
-                ( model
-                , Cmd.none
-                )
-
-            else
-                case action of
-                    Extract ->
-                        ( model
-                        , Ports.extractTabs selection
-                        )
-
-                    Delete ->
-                        ( model
-                        , Ports.removeTabs selection
-                        )
-
-                    Sort ->
-                        ( model
-                        , Ports.sortTabs selection
-                        )
-
-                    Pin ->
-                        ( model
-                        , Ports.pinTabs selection
-                        )
+            ( model
+            , cmd
+            )
 
         Apply edit ->
             case edit of
