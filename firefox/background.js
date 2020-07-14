@@ -120,8 +120,9 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       }
       return true;
     case "focusTab":
-      browser.tabs.update(message.tabId, { "active": true });
-      browser.windows.update(message.windowId, { "focused": true });
+      browser.tabs.update(message.tabId, { "active": true }, function (tab) {
+        browser.windows.update(tab.windowId, { "focused": true });
+      });
       return;
     case "moveTabs":
       var tabIds = message.tabIds;

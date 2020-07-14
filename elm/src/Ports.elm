@@ -32,7 +32,7 @@ port sortTabs : List Int -> Cmd msg
 port pinTabs : List Int -> Cmd msg
 
 
-port focusTab : ( Int, Int ) -> Cmd msg
+port focusTab : Int -> Cmd msg
 
 
 port openUrl : String -> Cmd msg

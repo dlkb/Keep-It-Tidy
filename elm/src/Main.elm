@@ -444,7 +444,7 @@ update msg model =
 
         FocusTab tab ->
             ( model
-            , Ports.focusTab ( tab.id, tab.windowId )
+            , Ports.focusTab tab.id
             )
 
         SetMessage message ->
@@ -474,7 +474,7 @@ update msg model =
                 case List.head checked of
                     Just tab ->
                         ( model
-                        , Ports.focusTab ( tab.id, tab.windowId )
+                        , Ports.focusTab tab.id
                         )
 
                     Nothing ->

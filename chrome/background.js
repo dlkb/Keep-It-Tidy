@@ -134,8 +134,9 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       }
       return true;
     case "focusTab":
-      chrome.tabs.update(message.tabId, { "active": true });
-      chrome.windows.update(message.windowId, { "focused": true });
+      chrome.tabs.update(message.tabId, { "active": true }, function (tab) {
+        chrome.windows.update(tab.windowId, { "focused": true });
+      });
       return;
     case "moveTabs":
       var tabIds = message.tabIds;

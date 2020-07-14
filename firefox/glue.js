@@ -38,9 +38,8 @@ function onLoad() {
       });
     });
 
-    app.ports.focusTab.subscribe(function (arg) {
-      var [tabId, windowId] = arg;
-      browser.runtime.sendMessage({ "task": "focusTab", "tabId": tabId, "windowId": windowId });
+    app.ports.focusTab.subscribe(function (tabId) {
+      browser.runtime.sendMessage({ "task": "focusTab", "tabId": tabId });
       window.close();
     });
 

@@ -39,9 +39,8 @@ function onLoad() {
       });
     });
 
-    app.ports.focusTab.subscribe(function (arg) {
-      var [tabId, windowId] = arg;
-      chrome.runtime.sendMessage({ "task": "focusTab", "tabId": tabId, "windowId": windowId });
+    app.ports.focusTab.subscribe(function (tabId) {
+      chrome.runtime.sendMessage({ "task": "focusTab", "tabId": tabId });
       window.close();
     });
 
