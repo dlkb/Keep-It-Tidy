@@ -79,26 +79,42 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       return true;
     case "sortTabs":
       var tabIds = message.tabIds;
-      var urls = {}; // tabId1 : url, ...
-      var count = 0;
+      var tabs = [];
       for (let tabId of tabIds) {
-        browser.tabs.get(tabId, function (tab) {
-          count++;
-          urls[tabId] = tab.url;
-          if (count == tabIds.length) {
-            tabIds.sort(function (tabId1, tabId2) {
-              if (urls[tabId1] < urls[tabId2]) {
+        chrome.tabs.get(tabId, function (tab) {
+          tabs.push(tab);
+          if (tabs.length == tabIds.length) {
+            tabs.sort(function (tab1, tab2) {
+              if (tab1.url < tab2.url) {
                 return -1;
               }
-              if (urls[tabId1] > urls[tabId2]) {
+              if (tab1.url > tab2.url) {
                 return 1;
               }
             });
-            // defaults to the window the tab is currently in
-            browser.tabs.move(tabIds, { "index": -1 }, function () {
-              sendTree();
-              return;
-            });
+            var tabIdsOf = {};
+            for (let tab of tabs) {
+              if (tabIdsOf.hasOwnProperty(tab.windowId)) {
+                tabIdsOf[tab.windowId].push(tab.id);
+              } else {
+                tabIdsOf[tab.windowId] = [tab.id];
+              }
+            }
+            var count = 0;
+            for (let [windowId, tabIds] of Object.entries(tabIdsOf)) {
+              chrome.tabs.move(tabIds, { "index": -1 }, function () {
+                count++;
+                if (count == Object.keys(tabIdsOf).length) {
+                  sendTree();
+                  return;
+                }
+                if (chrome.runtime.lastError) {
+                  console.warn("Whoops... " + chrome.runtime.lastError.message);
+                  sendTree();
+                  return;
+                }
+              });
+            }
           }
         });
       }
