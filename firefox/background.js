@@ -81,7 +81,7 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       var tabIds = message.tabIds;
       var tabs = [];
       for (let tabId of tabIds) {
-        chrome.tabs.get(tabId, function (tab) {
+        browser.tabs.get(tabId, function (tab) {
           tabs.push(tab);
           if (tabs.length == tabIds.length) {
             tabs.sort(function (tab1, tab2) {
@@ -102,14 +102,14 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             }
             var count = 0;
             for (let [windowId, tabIds] of Object.entries(tabIdsOf)) {
-              chrome.tabs.move(tabIds, { "index": -1 }, function () {
+              browser.tabs.move(tabIds, { "index": -1 }, function () {
                 count++;
                 if (count == Object.keys(tabIdsOf).length) {
                   sendTree();
                   return;
                 }
-                if (chrome.runtime.lastError) {
-                  console.warn("Whoops... " + chrome.runtime.lastError.message);
+                if (browser.runtime.lastError) {
+                  console.warn("Whoops... " + browser.runtime.lastError.message);
                   sendTree();
                   return;
                 }
