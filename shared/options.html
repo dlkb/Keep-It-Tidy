@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            flex-flow: column;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        input[type="checkbox"] {
+            margin-right: 10px;
+        }
+
+        .pref {
+            display: flex;
+            flex-flow: row;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .pref:last-child {
+            margin-bottom: 0;
+        }
+    </style>
+    <script src="options.js"></script>
+</head>
+
+<body>
+    <div class="pref">
+        <input type="checkbox" id="alwaysOnPanel">
+        <label for="alwaysOnPanel">Hide the browser panel</label>
+    </div>
+    <div class="pref">
+        <input type="checkbox" id="hints">
+        <label for="hints">Enable hints</label>
+    </div>
+</body>
+
+</html>

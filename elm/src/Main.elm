@@ -3,47 +3,55 @@ module Main exposing (main)
 import Array
 import Browser
 import Browser.Events
+import Dict exposing (Dict)
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
 import Json.Decode as Decode
+import Json.Encode as Encode
 import Ports
 import Regex exposing (Regex)
 import String
-
-
-main : Program Flags Model Msg
-main =
-    Browser.element
-        { init = init
-        , view = view
-        , update = update
-        , subscriptions = subscriptions
-        }
 
 
 type alias Model =
     { windows : List Window
     , search : String
     , sortBy : Sort
-    , footer : Kind
-    , visited : List TabId -- [last, next-to-last, ...]
-    , groupChecked : Bool -- stick selected tabs to the top of the list
+    , prefs : Prefs
+    , panel : Bool
+    , colorOf : Dict Int String
+    , processing : Bool
+    , visited : List Int -- [last, next-to-last, ...]
+    , groupChecked : Bool
+    }
+
+
+type alias Flags =
+    { windows : String
+    , visited : List Int
+    , prefs : Prefs
+    , colorOf : String
+    }
+
+
+type alias Prefs =
+    { alwaysOnPanel : Bool
+    , hints : Bool
     }
 
 
 type alias Window =
-    { id : WindowId
+    { id : Int
     , incognito : Bool
     , tabs : List Tab
     , enabled : Bool
-    , color : String
     , index : Int
     }
 
 
 type alias Tab =
-    { id : TabId
+    { id : Int
     , url : String
     , faviconUrl : String
     , title : String
@@ -55,14 +63,6 @@ type alias Tab =
     }
 
 
-type alias TabId =
-    Int
-
-
-type alias WindowId =
-    Int
-
-
 type CheckStatus
     = NotChecked
     | Checked
@@ -70,9 +70,8 @@ type CheckStatus
 
 
 type Kind
-    = Url String
-    | Hint String
-    | Title String
+    = Hint String
+    | Other String
 
 
 type Sort
@@ -84,7 +83,6 @@ type Sort
 type Edit
     = Not
     | Similar
-    | Duplicates
     | Uncheck
 
 
@@ -93,6 +91,30 @@ type Action
     | Delete
     | Sort
     | Pin
+
+
+type GlobalAction
+    = HighlightDuplicates
+    | DeleteAll
+    | SortAll
+
+
+type alias WindowInfos =
+    { id : Int
+    , incognito : Bool
+    , tabsInfos : List TabInfos
+    }
+
+
+type alias TabInfos =
+    { id : Int
+    , url : String
+    , faviconUrl : Maybe String
+    , title : String
+    , pinned : Bool
+    , windowId : Int
+    , active : Bool
+    }
 
 
 type Msg
@@ -108,77 +130,57 @@ type Msg
     | ToggleWindow Window
     | ToggleWindows
     | Execute Action
+    | ClickGlobalButton GlobalAction
     | Apply Edit
     | UpdatedTree String -- String is a JSON encoded string
     | FocusTab Tab
-    | SetMessage Kind
-    | Drop WindowId Int
+    | Drop Int Int
     | EnterPressed
+    | ClickPanelButton
+    | DragPreviewContent
 
 
-type alias WindowInfos =
-    { id : WindowId
-    , incognito : Bool
-    , tabsInfos : List TabInfos
-    }
-
-
-type alias TabInfos =
-    { id : TabId
-    , url : String
-    , faviconUrl : Maybe String
-    , title : String
-    , pinned : Bool
-    , windowId : WindowId
-    , active : Bool
-    }
-
-
-type alias Flags =
-    { windows : String
-    , visited : List TabId
-    }
+main : Program Flags Model Msg
+main =
+    Browser.element
+        { init = init
+        , view = view
+        , update = update
+        , subscriptions = subscriptions
+        }
 
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
     let
-        initModel =
-            Model [] "" Visited (Hint "Welcome!") flags.visited False
+        colorOf =
+            case Decode.decodeString colorOfDecoder flags.colorOf of
+                Ok dict ->
+                    dict
 
-        buildTheTree m =
-            onUpdatedTree flags.windows m
+                Err _ ->
+                    Dict.empty
+
+        initModel =
+            Model [] "" Visited flags.prefs flags.prefs.alwaysOnPanel colorOf False flags.visited False
 
         enableAllWindows m =
             { m | windows = List.map (\window -> { window | enabled = True }) m.windows }
+
+        filledModel =
+            initModel |> buildTree flags.windows |> enableAllWindows |> paintWindows
     in
-    ( initModel |> buildTheTree |> enableAllWindows
-    , Cmd.none
+    ( filledModel
+    , storeToLocalStorage filledModel
     )
 
 
 buildWindow : Int -> WindowInfos -> Window
 buildWindow index { id, incognito, tabsInfos } =
-    let
-        colors =
-            Array.fromList [ "MediumAquaMarine", "MediumSlateBlue", "Coral", "SkyBlue", "DeepPink", "SlateGray", "Chartreuse", "SandyBrown", "DarkViolet", "DodgerBlue", "PaleVioletRed", "#39689a", "#96ff98", "#b63c77" ]
-
-        color =
-            Array.get (modBy (Array.length colors) index) colors
-
-        picked =
-            case color of
-                Just c ->
-                    c
-
-                Nothing ->
-                    "Black"
-    in
     { id = id
     , incognito = incognito
     , tabs = List.indexedMap buildTab tabsInfos
     , enabled = False
-    , color = picked
     , index = index
     }
 
@@ -242,7 +244,7 @@ update msg model =
             )
 
         GroupCheckedClick ->
-            ( { model | groupChecked = not model.groupChecked, footer = messageGroupChecked (not model.groupChecked) }
+            ( { model | groupChecked = not model.groupChecked } |> fossilizeSelection
             , Cmd.none
             )
 
@@ -250,8 +252,8 @@ update msg model =
             let
                 words =
                     string
-                        |> Regex.replace (regexify "^ *") (\_ -> "")
-                        |> Regex.replace (regexify " *$") (\_ -> "")
+                        |> String.trimLeft
+                        |> String.trimRight
                         |> Regex.split (regexify " *, *")
                         |> List.map (Regex.split (regexify " +"))
 
@@ -268,14 +270,6 @@ update msg model =
                         |> List.map (List.foldl (&&) True)
                         |> List.foldl (||) False
 
-                -- Enable all windows in case the user has forgotten to enable any window
-                enableAllIfNone m =
-                    if List.isEmpty (getEnabledWindows m) then
-                        enableWindows (List.map .id m.windows) m
-
-                    else
-                        m
-
                 updateSearchResults m =
                     let
                         lastSearchResults =
@@ -283,7 +277,7 @@ update msg model =
                                 |> List.map .id
 
                         searchResults =
-                            getSelection m
+                            getList m
                                 |> List.filter match
                                 |> List.map .id
 
@@ -301,11 +295,8 @@ update msg model =
 
                 updateField m =
                     { m | search = string }
-
-                moveSelectionTop m =
-                    { m | groupChecked = True }
             in
-            ( model |> updateField |> enableAllIfNone |> moveSelectionTop |> updateSearchResults
+            ( model |> updateField |> moveSelectionTop |> updateSearchResults
             , Cmd.none
             )
 
@@ -325,21 +316,17 @@ update msg model =
             )
 
         CreateWindow ->
-            ( model
+            ( model |> processingUI
             , Ports.createWindow ()
             )
 
         CreateTab window ->
-            ( model
+            ( model |> processingUI
             , Ports.createTab window.id
             )
 
         ToggleWindow window ->
-            let
-                updateMessage m =
-                    { m | footer = messageToggleWindow <| not window.enabled }
-            in
-            ( model |> toggleWindow window.id |> updateMessage |> fossilizeSelection
+            ( model |> toggleWindow window.id |> fossilizeSelection
             , Cmd.none
             )
 
@@ -360,11 +347,8 @@ update msg model =
 
                     else
                         disableWindows enabledWindows
-
-                updateMessage m =
-                    { m | footer = messageToggleWindows <| enabledWindows == allWindows }
             in
-            ( model |> toggleWindows |> updateMessage |> fossilizeSelection
+            ( model |> toggleWindows |> fossilizeSelection
             , Cmd.none
             )
 
@@ -372,48 +356,64 @@ update msg model =
             let
                 checked =
                     List.map .id (getChecked model)
-
-                selected =
-                    List.map .id (getSelection model)
-
-                cmd =
-                    case action of
-                        Extract ->
-                            if List.isEmpty checked then
-                                Cmd.none
-
-                            else
-                                Ports.extractTabs checked
-
-                        Delete ->
-                            if List.isEmpty checked then
-                                Cmd.none
-
-                            else
-                                Ports.removeTabs checked
-
-                        Pin ->
-                            if List.isEmpty checked then
-                                Cmd.none
-
-                            else
-                                Ports.pinTabs checked
-
-                        Sort ->
-                            if List.isEmpty checked then
-                                if List.isEmpty selected then
-                                    Cmd.none
-
-                                else
-                                    -- if there are no checked tabs then we default to tabs from enabled windows
-                                    Ports.sortTabs selected
-
-                            else
-                                Ports.sortTabs checked
             in
-            ( model
-            , cmd
-            )
+            case action of
+                Extract ->
+                    ( model |> processingUI
+                    , Ports.extractTabs checked
+                    )
+
+                Delete ->
+                    ( model |> processingUI
+                    , Ports.removeTabs checked
+                    )
+
+                Pin ->
+                    ( model |> processingUI
+                    , Ports.pinTabs checked
+                    )
+
+                Sort ->
+                    ( model |> processingUI
+                    , Ports.sortTabs checked
+                    )
+
+        ClickGlobalButton action ->
+            let
+                list =
+                    List.map .id (getList model)
+
+                windows =
+                    getEnabledWindows model
+            in
+            case action of
+                HighlightDuplicates ->
+                    let
+                        duplicates =
+                            getDuplicates model
+
+                        selectDuplicates =
+                            updateTabs duplicates (setChecked Checked)
+                    in
+                    if List.length duplicates > 0 then
+                        ( model |> selectDuplicates |> moveSelectionTop
+                        , Cmd.none
+                        )
+
+                    else
+                        ( model
+                        , Cmd.none
+                        )
+
+                DeleteAll ->
+                    ( model |> processingUI
+                    , Ports.removeWindows windows
+                    )
+
+                SortAll ->
+                    ( model |> processingUI
+                    , Ports.sortTabs list
+                    )
 
         Apply edit ->
             case edit of
@@ -427,33 +427,27 @@ update msg model =
                     , Cmd.none
                     )
 
-                Duplicates ->
-                    ( model |> selectDuplicates |> fossilizeSelection
-                    , Cmd.none
-                    )
-
                 Uncheck ->
                     ( model |> uncheckAll |> fossilizeSelection
                     , Cmd.none
                     )
 
         UpdatedTree toBeDecoded ->
-            ( model |> onUpdatedTree toBeDecoded
-            , Cmd.none
+            let
+                updatedModel =
+                    model |> onUpdatedTree toBeDecoded
+            in
+            ( updatedModel
+            , storeToLocalStorage updatedModel
             )
 
         FocusTab tab ->
-            ( model
+            ( model |> processingUI
             , Ports.focusTab tab.id
             )
 
-        SetMessage message ->
-            ( { model | footer = message }
-            , Cmd.none
-            )
-
         Drop windowId index ->
-            ( model
+            ( model |> processingUI
             , Ports.moveTabs ( List.map .id (getChecked model), windowId, index )
             )
 
@@ -466,14 +460,14 @@ update msg model =
                     getCheckedFromSearch model
             in
             if List.length checkedFromSearch == 0 && model.search /= "" then
-                ( model
+                ( model |> processingUI
                 , Ports.openUrl ("https://www.google.com/search?q=" ++ model.search)
                 )
 
             else if List.length checked == 1 then
                 case List.head checked of
                     Just tab ->
-                        ( model
+                        ( model |> processingUI
                         , Ports.focusTab tab.id
                         )
 
@@ -487,17 +481,88 @@ update msg model =
                 , Cmd.none
                 )
 
+        ClickPanelButton ->
+            ( { model | panel = True }
+            , Cmd.none
+            )
 
-onUpdatedTree : String -> Model -> Model
-onUpdatedTree toBeDecoded model =
+        DragPreviewContent ->
+            ( { model | panel = True }
+            , Cmd.none
+            )
+
+
+paintWindows : Model -> Model
+paintWindows model =
     let
-        enabledWindows =
-            List.filter .enabled model.windows
-                |> List.map .id
+        windowIds =
+            List.map .id model.windows
 
-        checked =
-            List.map .id (getChecked model)
+        paint : List Int -> Model -> Model
+        paint ids m =
+            case ids of
+                windowId :: etc ->
+                    paint etc (paintWindow m windowId)
 
+                [] ->
+                    m
+    in
+    model |> cleanColorOf |> paint windowIds
+
+
+cleanColorOf : Model -> Model
+cleanColorOf model =
+    let
+        currentWindows =
+            List.map .id model.windows
+
+        storedWindows =
+            Dict.keys model.colorOf
+
+        toDelete =
+            List.filter (\windowId -> not <| List.member windowId currentWindows) storedWindows
+
+        cleanDict : List Int -> Dict Int String -> Dict Int String
+        cleanDict ids dict =
+            case ids of
+                windowId :: etc ->
+                    cleanDict etc (Dict.remove windowId dict)
+
+                [] ->
+                    dict
+    in
+    { model | colorOf = cleanDict toDelete model.colorOf }
+
+
+paintWindow : Model -> Int -> Model
+paintWindow model windowId =
+    let
+        colors =
+            Array.fromList [ "#3cb44b", "#ffe119", "#4363d8", "#FF1493", "#ADFF2F", "#9370DB", "#FFA500", "#87CEFA", "violet", "#aaffc3", "#dcbeff", "#fabed4", "darkgreen", "darkblue", "darkred", "#00FF00", "#42d4f4", "#f032e6", "#808000", "#469990", "#9A6324" ]
+
+        taken =
+            Dict.values model.colorOf
+
+        available =
+            Array.filter (\color -> not <| List.member color taken) colors
+
+        updatedColorOf =
+            if Dict.member windowId model.colorOf then
+                model.colorOf
+
+            else if Array.isEmpty available then
+                -- beyond XX windows, windows are gray because such a rare situation is not worth the hassle of generating random colors
+                Dict.insert windowId "gray" model.colorOf
+
+            else
+                Dict.insert windowId (Maybe.withDefault "black" (Array.get 0 available)) model.colorOf
+    in
+    { model | colorOf = updatedColorOf }
+
+
+buildTree : String -> Model -> Model
+buildTree toBeDecoded model =
+    let
         decoded =
             Decode.decodeString windowsDecoder toBeDecoded
 
@@ -510,11 +575,24 @@ onUpdatedTree toBeDecoded model =
                     []
 
         removeEmptyWindows : List WindowInfos -> List WindowInfos
-        removeEmptyWindows list =
-            List.filter (\windowInfos -> List.length windowInfos.tabsInfos > 0) list
+        removeEmptyWindows =
+            List.filter (\windowInfos -> List.length windowInfos.tabsInfos > 0)
+    in
+    { model | windows = List.indexedMap buildWindow windowsInfos }
 
-        updateTree m =
-            { m | windows = List.indexedMap buildWindow windowsInfos }
+
+onUpdatedTree : String -> Model -> Model
+onUpdatedTree toBeDecoded model =
+    let
+        enabledWindows =
+            List.filter .enabled model.windows
+                |> List.map .id
+
+        checked =
+            List.map .id (getChecked model)
+
+        enableToolbar m =
+            { m | processing = False }
 
         atLeastOneTabChecked tabs =
             case tabs of
@@ -544,10 +622,20 @@ onUpdatedTree toBeDecoded model =
                 |> updateTabs (getTabIds m) restoreTab
                 |> updateWindows (List.map .id m.windows) restoreWindow
     in
-    model |> fossilizeSelection |> updateTree |> restoreState
+    model
+        |> enableToolbar
+        |> fossilizeSelection
+        |> buildTree toBeDecoded
+        |> restoreState
+        |> paintWindows
 
 
-updateTabs : List TabId -> (Tab -> Tab) -> Model -> Model
+storeToLocalStorage : Model -> Cmd Msg
+storeToLocalStorage model =
+    Ports.storeString ( "colorOf", Encode.encode 0 (colorOfEncoder model.colorOf) )
+
+
+updateTabs : List Int -> (Tab -> Tab) -> Model -> Model
 updateTabs tabIds f model =
     let
         updateTab tab =
@@ -564,7 +652,7 @@ updateTabs tabIds f model =
     { model | windows = windows }
 
 
-enableWindows : List WindowId -> Model -> Model
+enableWindows : List Int -> Model -> Model
 enableWindows windowIds model =
     let
         updateWindow window =
@@ -573,7 +661,7 @@ enableWindows windowIds model =
     updateWindows windowIds updateWindow model
 
 
-disableWindows : List WindowId -> Model -> Model
+disableWindows : List Int -> Model -> Model
 disableWindows windowIds model =
     let
         updateWindow window =
@@ -586,7 +674,7 @@ disableWindows windowIds model =
     updateWindows windowIds updateWindow model
 
 
-toggleWindow : WindowId -> Model -> Model
+toggleWindow : Int -> Model -> Model
 toggleWindow windowId model =
     let
         updateWindow window =
@@ -603,7 +691,7 @@ toggleWindow windowId model =
     updateWindows [ windowId ] updateWindow model
 
 
-updateWindows : List WindowId -> (Window -> Window) -> Model -> Model
+updateWindows : List Int -> (Window -> Window) -> Model -> Model
 updateWindows windowIds f model =
     let
         updateWindow window =
@@ -654,7 +742,7 @@ setChecked status tab =
     { tab | checked = status }
 
 
-getEnabledWindows : Model -> List WindowId
+getEnabledWindows : Model -> List Int
 getEnabledWindows model =
     model.windows
         |> List.filter .enabled
@@ -665,7 +753,7 @@ invertSelection : Model -> Model
 invertSelection model =
     let
         selected =
-            getSelection model
+            getList model
                 |> List.map .id
     in
     updateTabs selected toggleChecked model
@@ -678,43 +766,46 @@ selectSimilar model =
             model
                 |> getChecked
                 |> List.map .url
-                |> List.map domainOf
+                |> List.map schemeHostOf
 
-        tabIds : List Tab -> List (Maybe String) -> List TabId
+        tabIds : List Tab -> List (Maybe String) -> List Int
         tabIds tabs domains =
             tabs
-                |> List.filter (\tab -> List.member (domainOf tab.url) domains)
+                |> List.filter (\tab -> List.member (schemeHostOf tab.url) domains)
                 |> List.map .id
     in
-    updateTabs (tabIds (getSelection model) checkedDomains) (setChecked Checked) model
+    updateTabs (tabIds (getList model) checkedDomains) (setChecked Checked) model
 
 
-domainOf : String -> Maybe String
-domainOf url =
-    case
-        Regex.findAtMost 1 (regexify "^.+?://([^/]+).*") url
-            |> List.map .submatches
-            |> List.concat
-    of
-        domain :: _ ->
-            domain
-
-        [] ->
-            Nothing
+schemeHostOf : String -> Maybe String
+schemeHostOf url =
+    Regex.findAtMost 1 (regexify "^.+?://[^/]+") url
+        |> List.map .match
+        |> List.head
 
 
-selectDuplicates : Model -> Model
-selectDuplicates model =
+processingUI : Model -> Model
+processingUI model =
+    { model | processing = True }
+
+
+moveSelectionTop : Model -> Model
+moveSelectionTop model =
+    { model | groupChecked = True }
+
+
+getDuplicates : Model -> List Int
+getDuplicates model =
     let
-        selected =
-            getSelection model
+        list =
+            getList model
 
         -- https://en.wikipedia.org/wiki/Cattle#Etymology is considered a duplicate of https://en.wikipedia.org/wiki/Cattle
         truncate url =
             url
                 |> Regex.replace (regexify "#.*$") (\_ -> "")
 
-        f : List String -> List Tab -> List TabId
+        f : List String -> List Tab -> List Int
         f urls tabs =
             case tabs of
                 tab :: etc ->
@@ -727,9 +818,7 @@ selectDuplicates model =
                 [] ->
                     []
     in
-    model
-        |> uncheckAll
-        |> updateTabs (f [] selected) (setChecked Checked)
+    f [] list
 
 
 regexify : String -> Regex
@@ -740,6 +829,20 @@ regexify s =
 uncheckAll : Model -> Model
 uncheckAll model =
     updateTabs (getTabIds model) (setChecked NotChecked) model
+
+
+setTooltip : Model -> Kind -> List (Html.Attribute Msg)
+setTooltip model message =
+    case message of
+        Hint msg ->
+            if model.prefs.hints then
+                [ Attributes.title msg ]
+
+            else
+                []
+
+        Other msg ->
+            [ Attributes.title msg ]
 
 
 subscriptions : Model -> Sub Msg
@@ -767,27 +870,104 @@ toMsg string =
 view : Model -> Html Msg
 view model =
     Html.div
-        [ Attributes.class "popup"
-        ]
-        [ Html.div
-            [ Attributes.class "main" ]
-            [ Html.div
-                [ Attributes.class "left" ]
-                [ viewBrowserHeader model
-                , Html.div
-                    [ Attributes.class "browser_container" ]
-                    [ viewBrowser model ]
-                ]
-            , Html.div
-                [ Attributes.class "right" ]
-                [ viewToolbar model
-                , viewSelection model
-                ]
+        [ Attributes.classList
+            [ ( "main", True )
+            , ( "expanded", model.panel )
             ]
-        , Html.div
-            [ Attributes.class "footer" ]
-            [ viewFooter model ]
         ]
+        [ viewPanel model
+        , viewOpenPanel model
+        , viewTogglebar model
+        , viewToolbar model
+        , viewList model
+        ]
+
+
+viewPanel : Model -> Html Msg
+viewPanel model =
+    if model.panel then
+        Html.div
+            [ Attributes.class "panel" ]
+            [ viewBrowserHeader model
+            , Html.div
+                [ Attributes.class "browser_container" ]
+                [ viewBrowser model ]
+            ]
+
+    else
+        Html.text ""
+
+
+viewTogglebar : Model -> Html Msg
+viewTogglebar model =
+    if not model.panel then
+        Html.div
+            [ Attributes.class "togglebar" ]
+            (List.map
+                (viewToggleWindow model)
+                model.windows
+            )
+
+    else
+        Html.text ""
+
+
+viewOpenPanel : Model -> Html Msg
+viewOpenPanel model =
+    Html.div
+        ([ Attributes.class "openPanel"
+         , Events.onClick ClickPanelButton
+         ]
+            ++ setTooltip model (Hint "Open the browser panel")
+        )
+        []
+
+
+viewToggleWindow : Model -> Window -> Html Msg
+viewToggleWindow model window =
+    let
+        color =
+            if window.enabled then
+                case Dict.get window.id model.colorOf of
+                    Just c ->
+                        c
+
+                    Nothing ->
+                        "black"
+
+            else
+                "white"
+
+        class =
+            if model.panel then
+                ( "toggleWindow_panel", True )
+
+            else
+                ( "toggleWindow_togglebar", True )
+
+        weightedHeight =
+            let
+                weight =
+                    sqrt <| toFloat <| List.length window.tabs
+            in
+            if model.panel then
+                []
+
+            else
+                [ Attributes.style "flex" (String.fromFloat weight) ]
+    in
+    Html.div
+        ([ Attributes.classList
+            [ ( "toggleWindow", True )
+            , class
+            ]
+         , Attributes.style "background-color" color
+         , Events.onClick (ToggleWindow window)
+         ]
+            ++ weightedHeight
+            ++ setTooltip model (messageToggleWindow window.enabled)
+        )
+        []
 
 
 viewBrowserHeader : Model -> Html Msg
@@ -812,7 +992,7 @@ viewBrowserHeader model =
                 ]
              , Events.onClick ToggleWindows
              ]
-                ++ displayMessage (messageToggleWindows (nEnabledWindows /= nWindows))
+                ++ setTooltip model (messageToggleWindows (nEnabledWindows /= nWindows))
             )
             []
         ]
@@ -836,55 +1016,41 @@ viewBrowser model =
                 [ Html.div
                     ([ Attributes.class "createTab"
                      , Events.onClick CreateWindow
-                     , Events.on "drop" (Decode.succeed (Execute Extract))
+                     , Events.on "drop" (Decode.succeed <| Execute Extract)
                      ]
-                        ++ displayMessage (Hint "Open a new window")
+                        ++ setTooltip model (Hint "Open a new window")
                         ++ dropzonable
                     )
                     []
                 ]
 
         windows =
-            List.map viewWindow model.windows
+            List.map (viewWindow model) model.windows
     in
     Html.div
         [ Attributes.class "browser" ]
         (windows ++ [ createWindow ])
 
 
-viewWindow : Window -> Html Msg
-viewWindow window =
+viewWindow : Model -> Window -> Html Msg
+viewWindow model window =
     let
-        color =
-            if window.enabled then
-                window.color
-
-            else
-                "white"
-
         toggleWindowSideBar =
-            Html.div
-                ([ Attributes.class "toggleWindow"
-                 , Attributes.style "background-color" color
-                 , onEventThenStop "click" (ToggleWindow window)
-                 ]
-                    ++ displayMessage (messageToggleWindow window.enabled)
-                )
-                []
+            viewToggleWindow model window
 
         createTab =
             Html.div
                 ([ Attributes.class "createTab"
-                 , onEventThenStop "click" (CreateTab window)
-                 , Events.on "drop" (Decode.succeed (Drop window.id -1))
+                 , Events.onClick (CreateTab window)
+                 , Events.on "drop" (Decode.succeed <| Drop window.id -1)
                  ]
-                    ++ displayMessage (Hint "Open a new tab")
+                    ++ setTooltip model (Hint "Open a new tab")
                     ++ dropzonable
                 )
                 []
 
         tabs =
-            List.map viewTab window.tabs
+            List.map (viewTab model) window.tabs
 
         container =
             Html.div
@@ -914,8 +1080,8 @@ messageToggleWindow enabled =
         Hint "Enable this window"
 
 
-viewTab : Tab -> Html Msg
-viewTab tab =
+viewTab : Model -> Tab -> Html Msg
+viewTab model tab =
     Html.div
         ([ Attributes.classList
             [ ( "tab", True )
@@ -926,11 +1092,11 @@ viewTab tab =
          , Attributes.style
             "background-image"
             ("url(" ++ tab.faviconUrl ++ ")")
-         , onEventThenStop "click" (TabClick tab)
-         , onEventThenStop "dblclick" (FocusTab tab)
-         , Events.on "drop" (Decode.succeed (Drop tab.windowId tab.index))
+         , Events.onClick (TabClick tab)
+         , Events.onDoubleClick (FocusTab tab)
+         , Events.on "drop" (Decode.succeed <| Drop tab.windowId tab.index)
          ]
-            ++ displayMessage (Title tab.title)
+            ++ setTooltip model (Other tab.title)
             ++ dropzonable
         )
         []
@@ -943,34 +1109,50 @@ dropzonable =
     ]
 
 
-onEventThenStop : String -> msg -> Html.Attribute msg
-onEventThenStop event message =
-    Events.custom event (Decode.succeed { message = message, preventDefault = False, stopPropagation = True })
-
-
 viewToolbar : Model -> Html Msg
 viewToolbar model =
+    let
+        checked =
+            getChecked model
+
+        right =
+            if model.processing then
+                [ viewProcessing ]
+
+            else if List.isEmpty (getEnabledWindows model) then
+                []
+
+            else if List.isEmpty checked then
+                [ viewNoPreview model ]
+
+            else
+                [ viewPreview model ]
+
+        left =
+            if List.isEmpty (getEnabledWindows model) then
+                []
+
+            else
+                [ viewInput model
+                , viewSortList model
+                ]
+    in
     Html.div
         [ Attributes.class "toolbar" ]
         [ Html.div
-            [ Attributes.class "row1" ]
-            [ viewInput model
-            ]
+            [ Attributes.class "toolbar_left" ]
+            left
         , Html.div
-            [ Attributes.class "row2" ]
-            [ viewEditSelection
-            , viewGroupChecked model
-            , viewSortSelection model
-            ]
-        , Html.div
-            [ Attributes.class "row3" ]
-            [ viewPreview model
-            , viewExecuteAction
-            ]
-        , Html.div
-            [ Attributes.class "toolbar_separator" ]
-            []
+            [ Attributes.class "toolbar_right" ]
+            right
         ]
+
+
+viewProcessing : Html Msg
+viewProcessing =
+    Html.div
+        [ Attributes.class "processing" ]
+        [ Html.text "Processing..." ]
 
 
 viewInput : Model -> Html Msg
@@ -990,25 +1172,25 @@ viewInput model =
                 [ ( "clearSearch", model.search /= "" ) ]
              , Events.onClick ClearSearch
              ]
-                ++ displayMessage (Hint "Clear the search field")
+                ++ setTooltip model (Hint "Clear the search field")
             )
             []
         ]
 
 
-viewEditSelection : Html Msg
-viewEditSelection =
+viewEditSelection : Model -> Html Msg
+viewEditSelection model =
     let
         edits =
-            [ Not, Similar, Duplicates, Uncheck ]
+            [ Not, Uncheck, Similar ]
     in
     Html.div
         [ Attributes.class "editSelection" ]
-        (List.map viewEditHelp edits)
+        (List.map (viewEditHelp model) edits)
 
 
-viewEditHelp : Edit -> Html Msg
-viewEditHelp edit =
+viewEditHelp : Model -> Edit -> Html Msg
+viewEditHelp model edit =
     let
         str =
             case edit of
@@ -1018,25 +1200,19 @@ viewEditHelp edit =
                 Similar ->
                     "similar"
 
-                Duplicates ->
-                    "duplicates"
-
                 Uncheck ->
                     "uncheck"
 
         message =
             case edit of
                 Not ->
-                    "Invert selection"
+                    Hint "Invert selection"
 
                 Similar ->
-                    "Add similar tabs to the selection"
-
-                Duplicates ->
-                    "Select duplicates"
+                    Hint "Add similar tabs to the selection"
 
                 Uncheck ->
-                    "Unselect all tabs"
+                    Hint "Unselect all tabs"
     in
     Html.div
         ([ Attributes.classList
@@ -1045,7 +1221,7 @@ viewEditHelp edit =
             ]
          , Events.onClick (Apply edit)
          ]
-            ++ displayMessage (Hint message)
+            ++ setTooltip model message
         )
         []
 
@@ -1059,7 +1235,7 @@ viewGroupChecked model =
             ]
          , Events.onClick GroupCheckedClick
          ]
-            ++ displayMessage (messageGroupChecked model.groupChecked)
+            ++ setTooltip model (messageGroupChecked model.groupChecked)
         )
         []
 
@@ -1073,22 +1249,23 @@ messageGroupChecked grouped =
         Hint "Stick selected tabs to the top of the list"
 
 
-viewSortSelection : Model -> Html Msg
-viewSortSelection model =
+viewSortList : Model -> Html Msg
+viewSortList model =
     let
         sorts =
             [ Visited, Websites, Windows ]
     in
     Html.div
-        [ Attributes.class "sortSelection" ]
+        [ Attributes.class "sortList" ]
         (List.map
-            (viewSortSelectionHelp model)
+            (viewSortListHelp model)
             sorts
+            ++ [ viewGroupChecked model ]
         )
 
 
-viewSortSelectionHelp : Model -> Sort -> Html Msg
-viewSortSelectionHelp model sort =
+viewSortListHelp : Model -> Sort -> Html Msg
+viewSortListHelp model sort =
     let
         str =
             case sort of
@@ -1096,15 +1273,15 @@ viewSortSelectionHelp model sort =
                     "visited"
 
                 Websites ->
-                    "websites"
+                    "website"
 
                 Windows ->
-                    "windows"
+                    "window"
 
         message =
             case sort of
                 Visited ->
-                    "Sort tabs by last visited"
+                    "Sort list by last visited"
 
                 Websites ->
                     "Group tabs by website"
@@ -1114,13 +1291,13 @@ viewSortSelectionHelp model sort =
     in
     Html.div
         ([ Attributes.classList
-            [ ( "sort", True )
+            [ ( "sortBy", True )
             , ( str, True )
             , ( "selected", model.sortBy == sort )
             ]
          , Events.onClick (SortBy sort)
          ]
-            ++ displayMessage (Hint message)
+            ++ setTooltip model (Hint message)
         )
         [ Html.text str ]
 
@@ -1128,34 +1305,104 @@ viewSortSelectionHelp model sort =
 viewPreview : Model -> Html Msg
 viewPreview model =
     let
-        selected =
-            getSelection model
-
         checked =
             getChecked model
+
+        content tabs =
+            let
+                maxFavicons =
+                    33
+
+                lengthText =
+                    -- in number of favicons
+                    4
+
+                nOthers =
+                    if List.length checked - maxFavicons > 0 then
+                        List.length checked - maxFavicons + lengthText
+
+                    else
+                        List.length checked - maxFavicons
+            in
+            case tabs of
+                tab :: etc ->
+                    if List.length etc == nOthers && nOthers /= 0 then
+                        [ viewPreviewHelp tab
+                        , Html.div
+                            [ Attributes.class "nOtherTabs" ]
+                            [ Html.text ("+ " ++ String.fromInt nOthers ++ " tabs") ]
+                        ]
+
+                    else
+                        viewPreviewHelp tab :: content etc
+
+                [] ->
+                    []
     in
-    if List.isEmpty checked then
-        if List.isEmpty selected then
-            Html.div
-                [ Attributes.class "noPreview" ]
-                [ Html.text "No window enabled" ]
-
-        else
-            Html.div
-                [ Attributes.class "noPreview" ]
-                [ Html.text "No tab selected" ]
-
-    else
-        Html.div
-            [ Attributes.class "preview" ]
+    Html.div
+        [ Attributes.class "preview" ]
+        [ viewEditSelection model
+        , Html.div
+            [ Attributes.class "preview_content" ]
             [ Html.div
-                ([ Attributes.class "preview_content"
+                ([ Attributes.class "preview_favicons"
+                 , Events.custom "drag" (Decode.succeed { message = DragPreviewContent, preventDefault = False, stopPropagation = False })
                  , Attributes.draggable "true"
                  ]
-                    ++ displayMessage (Hint "You can drag these tabs to a new position")
+                    ++ setTooltip model (Hint "You can drag these tabs to a new position")
                 )
-                (checked |> List.map viewPreviewHelp)
+                (content checked)
             ]
+        , viewExecuteAction model
+        ]
+
+
+viewNoPreview : Model -> Html Msg
+viewNoPreview model =
+    let
+        globalActions =
+            [ HighlightDuplicates, DeleteAll, SortAll ]
+    in
+    Html.div
+        [ Attributes.class "noPreview" ]
+        (List.map (viewGlobalActionHelp model) globalActions)
+
+
+viewGlobalActionHelp : Model -> GlobalAction -> Html Msg
+viewGlobalActionHelp model action =
+    let
+        str =
+            case action of
+                HighlightDuplicates ->
+                    "duplicates"
+
+                DeleteAll ->
+                    "delete"
+
+                SortAll ->
+                    "sort"
+
+        message =
+            case action of
+                HighlightDuplicates ->
+                    "Select all duplicates"
+
+                DeleteAll ->
+                    "Remove all tabs"
+
+                SortAll ->
+                    "Sort all tabs by website"
+    in
+    Html.div
+        ([ Attributes.classList
+            [ ( "globalAction", True )
+            , ( str, True )
+            ]
+         , Events.onClick (ClickGlobalButton action)
+         ]
+            ++ setTooltip model (Hint message)
+        )
+        []
 
 
 viewPreviewHelp : Tab -> Html Msg
@@ -1169,19 +1416,19 @@ viewPreviewHelp tab =
         []
 
 
-viewExecuteAction : Html Msg
-viewExecuteAction =
+viewExecuteAction : Model -> Html Msg
+viewExecuteAction model =
     let
         actions =
             [ Extract, Delete, Sort, Pin ]
     in
     Html.div
         [ Attributes.class "executeAction" ]
-        (List.map viewExecuteActionHelp actions)
+        (List.map (viewExecuteActionHelp model) actions)
 
 
-viewExecuteActionHelp : Action -> Html Msg
-viewExecuteActionHelp action =
+viewExecuteActionHelp : Model -> Action -> Html Msg
+viewExecuteActionHelp model action =
     let
         str =
             case action of
@@ -1218,37 +1465,31 @@ viewExecuteActionHelp action =
             ]
          , Events.onClick (Execute action)
          ]
-            ++ displayMessage (Hint message)
+            ++ setTooltip model (Hint message)
         )
         []
 
 
-viewSelection : Model -> Html Msg
-viewSelection model =
+viewList : Model -> Html Msg
+viewList model =
     Html.div
-        [ Attributes.class "selection_container" ]
+        [ Attributes.class "list_container" ]
         [ Html.div
-            [ Attributes.class "selection" ]
-            (List.map (viewItem model) (getSelection model))
+            [ Attributes.class "list" ]
+            (List.map (viewItem model) (getList model))
         ]
 
 
 viewItem : Model -> Tab -> Html Msg
 viewItem model tab =
     let
-        color =
-            model.windows
-                |> List.filter (\window -> window.id == tab.windowId)
-                |> List.map .color
-                |> List.head
-
         windowColor =
-            case color of
+            case Dict.get tab.windowId model.colorOf of
                 Just c ->
                     c
 
                 Nothing ->
-                    "Blue"
+                    "black"
 
         favicon =
             Html.div
@@ -1256,10 +1497,19 @@ viewItem model tab =
                 , Attributes.style
                     "background-image"
                     ("url(" ++ tab.faviconUrl ++ ")")
+                , Events.onClick (FocusTab tab)
                 ]
                 []
 
         title =
+            let
+                text =
+                    if tab.title /= "" then
+                        tab.title
+
+                    else
+                        tab.url
+            in
             Html.div
                 [ Attributes.classList
                     [ ( "item_title", True )
@@ -1267,7 +1517,27 @@ viewItem model tab =
                     ]
                 , Events.onClick (FocusTab tab)
                 ]
-                [ Html.text tab.title ]
+                [ Html.text text ]
+
+        website =
+            let
+                text =
+                    let
+                        strip : String -> Maybe String
+                        strip schemeHost =
+                            if String.left 8 schemeHost == "https://" then
+                                Just (String.slice 8 (String.length schemeHost) schemeHost)
+
+                            else
+                                Just schemeHost
+                    in
+                    Maybe.withDefault "" (tab.url |> schemeHostOf |> Maybe.andThen strip)
+            in
+            Html.div
+                [ Attributes.class "item_website"
+                , Events.onClick (FocusTab tab)
+                ]
+                [ Html.text text ]
 
         checkbox =
             Html.div
@@ -1279,45 +1549,19 @@ viewItem model tab =
                     [ Attributes.classList
                         [ ( "item_check", True )
                         , ( "checked", isChecked tab )
+                        , ( "visible", List.length (getChecked model) > 0 )
                         ]
                     ]
                     []
                 ]
     in
     Html.div
-        (Attributes.classList
+        [ Attributes.classList
             [ ( "item", True )
             , ( "checked", isChecked tab )
             ]
-            :: displayMessage (Url tab.url)
-        )
-        [ favicon, title, checkbox ]
-
-
-viewFooter : Model -> Html Msg
-viewFooter model =
-    let
-        txt kind str =
-            Html.div
-                [ Attributes.class kind
-                , Attributes.class "message"
-                ]
-                [ Html.text str ]
-    in
-    case model.footer of
-        Hint str ->
-            txt "hint" str
-
-        Url str ->
-            txt "url" str
-
-        Title str ->
-            txt "title" str
-
-
-displayMessage : Kind -> List (Html.Attribute Msg)
-displayMessage message =
-    [ Events.onMouseEnter (SetMessage message), Events.onMouseLeave (SetMessage (Hint "")) ]
+        ]
+        [ favicon, title, website, checkbox ]
 
 
 isChecked : Tab -> Bool
@@ -1325,8 +1569,8 @@ isChecked tab =
     tab.checked == Checked || tab.checked == CheckedFromSearch
 
 
-getSelection : Model -> List Tab
-getSelection model =
+getList : Model -> List Tab
+getList model =
     let
         tabs =
             model.windows
@@ -1370,7 +1614,7 @@ getSelection model =
                 tabs
 
 
-getIndexOfWindow : WindowId -> Model -> Maybe Int
+getIndexOfWindow : Int -> Model -> Maybe Int
 getIndexOfWindow windowId model =
     model.windows
         |> List.filter (\window -> window.id == windowId)
@@ -1378,7 +1622,7 @@ getIndexOfWindow windowId model =
         |> List.head
 
 
-getIndexOf : TabId -> List TabId -> Int
+getIndexOf : Int -> List Int -> Int
 getIndexOf tabId tabIds =
     let
         helper : List Int -> Int -> Int -> Int
@@ -1399,7 +1643,7 @@ getIndexOf tabId tabIds =
 
 getChecked : Model -> List Tab
 getChecked model =
-    getSelection model
+    getList model
         |> List.filter (\tab -> isChecked tab)
 
 
@@ -1409,7 +1653,7 @@ getCheckedFromSearch model =
         |> List.filter (\tab -> tab.checked == CheckedFromSearch)
 
 
-getTabIds : Model -> List TabId
+getTabIds : Model -> List Int
 getTabIds model =
     model.windows
         |> List.map .tabs
@@ -1419,6 +1663,31 @@ getTabIds model =
 
 
 -- JSON
+
+
+colorOfEncoder : Dict Int String -> Encode.Value
+colorOfEncoder colorOf =
+    let
+        tupleEncoder : ( Int, String ) -> Encode.Value
+        tupleEncoder ( windowId, color ) =
+            Encode.object
+                [ ( "windowId", Encode.int windowId )
+                , ( "color", Encode.string color )
+                ]
+    in
+    Encode.list tupleEncoder <| Dict.toList colorOf
+
+
+colorOfDecoder : Decode.Decoder (Dict Int String)
+colorOfDecoder =
+    let
+        tupleDecoder =
+            Decode.map2 Tuple.pair
+                (Decode.field "windowId" Decode.int)
+                (Decode.field "color" Decode.string)
+    in
+    Decode.list tupleDecoder
+        |> Decode.map Dict.fromList
 
 
 windowsDecoder : Decode.Decoder (List WindowInfos)

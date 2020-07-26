@@ -1,7 +1,8 @@
 {
   "manifest_version": 2,
   "name": "__MSG_extName__",
-  "version": "3.0.2",
+  "short_name": "__MSG_extShortName__",
+  "version": "3.1",
   "default_locale": "en",
   "description": "__MSG_extDesc__",
   "icons": {
@@ -23,8 +24,19 @@
     ],
     "persistent": true
   },
+  "options_ui": {
+    "page": "options.html",
+    "browser_style": true
+  },
   "permissions": [
     "tabs",
-    "notifications"
-  ]
+    "notifications",
+    "storage",
+    "menus"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "kit@damien.l.k.brunet"
+    }
+  }
 }

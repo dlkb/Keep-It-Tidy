@@ -1,11 +1,26 @@
+const EXTENSION_URL = "https://addons.mozilla.org/en-US/firefox/addon/kit/";
 const MAX_LENGTH = 1024; // max length of the array keeping track of the browsing history
 var visited = []; // tabIds of the last visited tabs, [last, next-to-last, ...]
+
+browser.menus.create({
+  title: "Rate Extension",
+  contexts: ["browser_action"],
+  onclick: function () {
+    browser.tabs.create({ "url": EXTENSION_URL });
+  }
+});
 
 function pushTo(arr, item) {
   arr.unshift(item);
   if (arr.length > MAX_LENGTH) {
     arr.pop();
   }
+}
+
+function getPrefs(callback) {
+  browser.storage.sync.get(["alwaysOnPanel", "hints"], function (prefs) {
+    callback(prefs);
+  });
 }
 
 browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
@@ -21,8 +36,16 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   }
   switch (message.task) {
     case "init":
-      getWindowsJson(function (json) {
-        sendResponse({ "windows": json, "visited": visited });
+      getPrefs(function (prefs) {
+        getWindowsJson(function (json) {
+          browser.storage.local.get(["colorOf"], function (result) {
+            var colorOf = "";
+            if (result.colorOf != undefined) {
+              colorOf = result.colorOf;
+            }
+            sendResponse({ "windows": json, "visited": visited, "prefs": prefs, "colorOf": colorOf });
+          });
+        });
       });
       return true;
     case "createTab":
@@ -42,14 +65,31 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         return;
       });
       return true;
+    case "removeWindows":
+      // in firefox closing a window also closes the popup, so we don't wait for the new tree
+      var windowIds = message.windowIds;
+      for (let windowId of windowIds) {
+        browser.windows.remove(windowId, function () {
+          if (browser.runtime.lastError) {
+            console.warn("Whoops... " + browser.runtime.lastError.message);
+            return;
+          }
+        });
+      }
+      return;
     case "extractTabs":
       var tabIds = message.tabIds;
       var firstTabId = tabIds.shift();
+      // firefox doesn't support the focused property so the new window steals the focus automatically
       browser.windows.create({ "tabId": firstTabId }, function (win) {
-        if (tabIds.length == 0) {
+        if (browser.runtime.lastError) {
+          console.warn("Whoops... " + browser.runtime.lastError.message);
           return;
         }
-        browser.tabs.move(tabIds, { "windowId": win.id, "index": 1 }, function () {
+        if (tabIds.length == 0) { // if only one tab in the selection
+          return;
+        }
+        browser.tabs.move(tabIds, { "windowId": win.id, "index": -1 }, function () {
           if (browser.runtime.lastError) {
             console.warn("Whoops... " + browser.runtime.lastError.message);
           }
@@ -63,12 +103,12 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       for (let tabId of tabIds) {
         browser.tabs.get(tabId, function (tab) {
           browser.tabs.update(tabId, { "pinned": !tab.pinned }, function () {
-            count++;
             if (browser.runtime.lastError) {
               console.warn("Whoops... " + browser.runtime.lastError.message);
               sendTree();
               return;
             }
+            count++;
             if (count == tabIds.length) {
               sendTree();
               return;
@@ -103,13 +143,13 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             var count = 0;
             for (let [windowId, tabIds] of Object.entries(tabIdsOf)) {
               browser.tabs.move(tabIds, { "index": -1 }, function () {
-                count++;
-                if (count == Object.keys(tabIdsOf).length) {
+                if (browser.runtime.lastError) {
+                  console.warn("Whoops... " + browser.runtime.lastError.message);
                   sendTree();
                   return;
                 }
-                if (browser.runtime.lastError) {
-                  console.warn("Whoops... " + browser.runtime.lastError.message);
+                count++;
+                if (count == Object.keys(tabIdsOf).length) {
                   sendTree();
                   return;
                 }
@@ -127,27 +167,22 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     case "moveTabs":
       var tabIds = message.tabIds;
       var index = message.index;
-      var count = 0;
-      if (message.index == -1) {
-        tabIds.reverse(); // trick
-      }
-      for (let tabId of tabIds) { // inserting a group of tabs at once doesn't work in this case, tabs end up not together, not sure why
-        browser.tabs.move(tabId, { "index": index, "windowId": message.windowId }, function () {
-          count++;
-          if (browser.runtime.lastError) {
-            console.warn("Whoops... " + browser.runtime.lastError.message);
-            sendTree();
-            return;
-          }
-          if (count == tabIds.length) {
-            sendTree();
-            return;
-          }
-        });
-      }
+      var windowId = message.windowId;
+      browser.tabs.move(tabIds, { "index": index, "windowId": windowId }, function () {
+        if (browser.runtime.lastError) {
+          console.warn("Whoops... " + browser.runtime.lastError.message);
+        }
+        sendTree();
+        return;
+      });
       return true;
     case "openUrl":
       browser.tabs.create({ "url": message.url });
+      return;
+    case "storeString":
+      var blob = {};
+      blob[message.name] = message.string;
+      browser.storage.local.set(blob);
       return;
   }
 });
@@ -167,23 +202,35 @@ browser.windows.onFocusChanged.addListener(function (windowId) {
   });
 });
 
-var UPDATE_FROM_224 = "New name, new logo, simpler design, bug fixes. See the store for more info.";
-var UPDATE_FROM_224_CONTEXT = "Top Tomato => Keep It Tidy"
+var UPDATE_FROM_302 = "New look, the comeback of default selections, option to hide the browser panel, option to hide hints.";
+var UPDATE_FROM_302_CONTEXT = "";
 
 browser.runtime.onInstalled.addListener(function (details) {
-  if (details.reason == "install") { // if first installation
-    // Set default values for options
-  } else if (details.reason == "update") { // if update of the extension
-    // Say something to the user
-    if (details.previousVersion == "2.2.4") {
+  if (details.reason == "install") {
+    browser.storage.sync.set({ "alwaysOnPanel": false, "hints": true });
+  } else if (details.reason == "update") {
+    if (isOlderThan(details.previousVersion, "3.1")) {
+      browser.storage.sync.set({ "alwaysOnPanel": true, "hints": true });
       var options = {
         type: "basic",
         title: "Keep It Tidy",
-        message: UPDATE_FROM_224,
-        contextMessage: UPDATE_FROM_224_CONTEXT,
+        message: UPDATE_FROM_302,
+        contextMessage: UPDATE_FROM_302_CONTEXT,
         iconUrl: "img/logo-128.png"
       }
       browser.notifications.create("update", options);
     }
   }
 });
+
+function isOlderThan(version, reference) {
+  var versionParts = version.split(".");
+  var referenceParts = reference.split(".");
+  for (var i = 0; i < reference.length; i++) {
+    var a = parseInt(versionParts[i]) || 0;
+    var b = parseInt(referenceParts[i]) || 0;
+    if (a < b) return true;
+    if (a > b) return false;
+  }
+  return false;
+}

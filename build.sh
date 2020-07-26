@@ -6,6 +6,7 @@ rm -f -r $1/img/
 rm -f $1/popup.css
 rm -f $1/popup.html
 rm -f $1/popup.js
+rm -f $1/options.html
 
 cp -r shared/ $1/
 

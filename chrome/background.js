@@ -8,6 +8,12 @@ function pushTo(arr, item) {
   }
 }
 
+function getPrefs(callback) {
+  chrome.storage.sync.get(["alwaysOnPanel", "hints"], function (prefs) {
+    callback(prefs);
+  });
+}
+
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   function getWindowsJson(callback) {
     chrome.windows.getAll({ "populate": true, "windowTypes": ["normal"] }, function (windows) {
@@ -21,8 +27,16 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   }
   switch (message.task) {
     case "init":
-      getWindowsJson(function (json) {
-        sendResponse({ "windows": json, "visited": visited });
+      getPrefs(function (prefs) {
+        getWindowsJson(function (json) {
+          chrome.storage.local.get(["colorOf"], function (result) {
+            var colorOf = "";
+            if (result.colorOf != undefined) {
+              colorOf = result.colorOf;
+            }
+            sendResponse({ "windows": json, "visited": visited, "prefs": prefs, "colorOf": colorOf });
+          });
+        });
       });
       return true;
     case "createTab":
@@ -54,15 +68,44 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         }
       });
       return true;
+    case "removeWindows":
+      // same workaround because same type of callback as tabs.remove
+      var windowIds = message.windowIds;
+      var count = 0;
+      function onWindowRemoved() {
+        count++;
+        if (count == windowIds.length) {
+          chrome.windows.onRemoved.removeListener(onWindowRemoved);
+          sendTree();
+          return;
+        }
+      }
+      chrome.windows.onRemoved.addListener(onWindowRemoved);
+      for (let windowId of windowIds) {
+        chrome.windows.remove(windowId, function () {
+          if (chrome.runtime.lastError) {
+            console.warn("Whoops... " + chrome.runtime.lastError.message);
+            chrome.windows.onRemoved.removeListener(onWindowRemoved);
+            sendTree();
+            return;
+          }
+        });
+      }
+      return true;
     case "extractTabs":
       var tabIds = message.tabIds;
       var firstTabId = tabIds.shift();
       chrome.windows.create({ "focused": false, "tabId": firstTabId }, function (win) {
-        if (tabIds.length == 0) {
+        if (chrome.runtime.lastError) {
+          console.warn("Whoops... " + chrome.runtime.lastError.message);
           sendTree();
           return;
         }
-        chrome.tabs.move(tabIds, { "windowId": win.id, "index": 1 }, function () {
+        if (tabIds.length == 0) { // if only one tab in the selection
+          sendTree();
+          return;
+        }
+        chrome.tabs.move(tabIds, { "windowId": win.id, "index": -1 }, function () {
           if (chrome.runtime.lastError) {
             console.warn("Whoops... " + chrome.runtime.lastError.message);
           }
@@ -77,12 +120,12 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       for (let tabId of tabIds) {
         chrome.tabs.get(tabId, function (tab) {
           chrome.tabs.update(tabId, { "pinned": !tab.pinned }, function () {
-            count++;
             if (chrome.runtime.lastError) {
               console.warn("Whoops... " + chrome.runtime.lastError.message);
               sendTree();
               return;
             }
+            count++;
             if (count == tabIds.length) {
               sendTree();
               return;
@@ -117,13 +160,13 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             var count = 0;
             for (let [windowId, tabIds] of Object.entries(tabIdsOf)) {
               chrome.tabs.move(tabIds, { "index": -1 }, function () {
-                count++;
-                if (count == Object.keys(tabIdsOf).length) {
+                if (chrome.runtime.lastError) {
+                  console.warn("Whoops... " + chrome.runtime.lastError.message);
                   sendTree();
                   return;
                 }
-                if (chrome.runtime.lastError) {
-                  console.warn("Whoops... " + chrome.runtime.lastError.message);
+                count++;
+                if (count == Object.keys(tabIdsOf).length) {
                   sendTree();
                   return;
                 }
@@ -135,33 +178,43 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       return true;
     case "focusTab":
       chrome.tabs.update(message.tabId, { "active": true }, function (tab) {
+        if (chrome.runtime.lastError) {
+          console.warn("Whoops... " + chrome.runtime.lastError.message);
+        }
         chrome.windows.update(tab.windowId, { "focused": true });
       });
       return;
     case "moveTabs":
       var tabIds = message.tabIds;
       var index = message.index;
-      var count = 0;
-      if (message.index == -1) {
-        tabIds.reverse(); // trick
-      }
-      for (let tabId of tabIds) { // inserting a group of tabs at once doesn't work in this case, tabs end up not together, not sure why
-        chrome.tabs.move(tabId, { "index": index, "windowId": message.windowId }, function () {
-          count++;
+      var windowId = message.windowId;
+      // inserting tabs when index != end is buggy so we move our tabs plus a bunch of tabs to the end instead
+      chrome.windows.get(windowId, { "populate": true }, function (win) {
+        var tabsAfterIndex = [];
+        if (index != -1) {
+          tabsAfterIndex = win.tabs.map(tab => tab.id).slice(index, win.tabs.length);
+        }
+        var tabsToMove = tabIds.concat(
+          tabsAfterIndex.filter(function (tabId) {
+            return !tabIds.includes(tabId);
+          })
+        );
+        chrome.tabs.move(tabsToMove, { "index": -1, "windowId": windowId }, function () {
           if (chrome.runtime.lastError) {
             console.warn("Whoops... " + chrome.runtime.lastError.message);
-            sendTree();
-            return;
           }
-          if (count == tabIds.length) {
-            sendTree();
-            return;
-          }
+          sendTree();
+          return;
         });
-      }
+      });
       return true;
     case "openUrl":
       chrome.tabs.create({ "url": message.url });
+      return;
+    case "storeString":
+      var blob = {};
+      blob[message.name] = message.string;
+      chrome.storage.local.set(blob);
       return;
   }
 });
@@ -181,23 +234,35 @@ chrome.windows.onFocusChanged.addListener(function (windowId) {
   });
 });
 
-var UPDATE_FROM_224 = "New name, new logo, simpler design, bug fixes. See the store for more info.";
-var UPDATE_FROM_224_CONTEXT = "Top Tomato => Keep It Tidy"
+var UPDATE_FROM_302 = "New look, the comeback of default selections, option to hide the browser panel, option to hide hints.";
+var UPDATE_FROM_302_CONTEXT = "";
 
 chrome.runtime.onInstalled.addListener(function (details) {
-  if (details.reason == "install") { // if first installation
-    // Set default values for options
-  } else if (details.reason == "update") { // if update of the extension
-    // Say something to the user
-    if (details.previousVersion == "2.2.4") {
+  if (details.reason == "install") {
+    chrome.storage.sync.set({ "alwaysOnPanel": false, "hints": true });
+  } else if (details.reason == "update") {
+    if (isOlderThan(details.previousVersion, "3.1")) {
+      chrome.storage.sync.set({ "alwaysOnPanel": true, "hints": true });
       var options = {
         type: "basic",
         title: "Keep It Tidy",
-        message: UPDATE_FROM_224,
-        contextMessage: UPDATE_FROM_224_CONTEXT,
+        message: UPDATE_FROM_302,
+        contextMessage: UPDATE_FROM_302_CONTEXT,
         iconUrl: "img/logo-128.png"
       }
       chrome.notifications.create("update", options);
     }
   }
 });
+
+function isOlderThan(version, reference) {
+  var versionParts = version.split(".");
+  var referenceParts = reference.split(".");
+  for (var i = 0; i < reference.length; i++) {
+    var a = parseInt(versionParts[i]) || 0;
+    var b = parseInt(referenceParts[i]) || 0;
+    if (a < b) return true;
+    if (a > b) return false;
+  }
+  return false;
+}

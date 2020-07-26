@@ -7,7 +7,9 @@ port module Ports exposing
     , openUrl
     , pinTabs
     , removeTabs
+    , removeWindows
     , sortTabs
+    , storeString
     , updatedTree
     )
 
@@ -21,6 +23,9 @@ port createWindow : () -> Cmd msg
 
 
 port removeTabs : List Int -> Cmd msg
+
+
+port removeWindows : List Int -> Cmd msg
 
 
 port extractTabs : List Int -> Cmd msg
@@ -39,6 +44,9 @@ port openUrl : String -> Cmd msg
 
 
 port moveTabs : ( List Int, Int, Int ) -> Cmd msg
+
+
+port storeString : ( String, String ) -> Cmd msg
 
 
 
