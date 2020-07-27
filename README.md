@@ -5,15 +5,15 @@ Chrome/Firefox Extension
 
 [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/kit/)
 
-Previously known as Top Tomato
+Search example: power rangers, superman, batman = (power AND rangers) OR superman OR batman
 
-You can search the tabs by entering keywords into the field.
-
-Example: power rangers, superman, batman = (power AND rangers) OR superman OR batman
-
-Press Enter when there is no match to search for these keywords on Google.
+Press Enter when there is no match to search instead on Google.
 
 If only one tab is selected, pressing Enter will focus this tab.
+
+You can sort all windows by website.
+
+You can select duplicates.
 
 You can close, sort by website, pin/unpin the selected tabs.
 
@@ -23,7 +23,7 @@ You can move the selection by dragging it to a new position in the left panel. T
 
 You can doubleclick a tab in the left panel or click a tab in the right panel to focus this tab.
 
-You can invert the selection, add similar (same website) tabs to the selection or select duplicates.
+You can invert the selection, add similar (same website) tabs to the selection.
 
 You can sort the list by last visited or group the tabs by website/window.
 
