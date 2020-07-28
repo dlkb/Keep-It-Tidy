@@ -33,6 +33,9 @@ Matches from search are added to the selection unless you empty the search field
 
 Selecting a tab from a disabled window will automatically enable this window.
 
+Option to keep the left panel always open.
+Option to hide hints.
+
 KIT doesn't collect any data.
 
 ### Chrome
