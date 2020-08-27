@@ -52,3 +52,10 @@ Make sure [elm](https://elm-lang.org/) is in your path then run:
 ./build.sh firefox
 ./build.sh chrome
 ```
+
+## Packaging
+
+```
+zip -r chrome.zip chrome/* -x "*/.*"
+cd firefox && zip -r ../firefox.zip * -x "*/.*"
+```
